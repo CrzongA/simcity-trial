@@ -20,16 +20,16 @@ const cartoDarkMatter = new UrlTemplateImageryProvider({
 });
 
 const CityMap = () => {
-  const viewerRef = useRef(null);
-  const [terrainProvider, setTerrainProvider] = useState(null);
-  const [minHeight, setMinHeight] = useState(10);
-  const [sse, setSse] = useState(4);
-  const [fxaaEnabled, setFxaaEnabled] = useState(true);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const viewerRef = useRef<any>(null);
+  const [terrainProvider, setTerrainProvider] = useState<any>(null);
+  const [minHeight, setMinHeight] = useState<number>(10);
+  const [sse, setSse] = useState<number>(4);
+  const [fxaaEnabled, setFxaaEnabled] = useState<boolean>(true);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
 
-  const clippingPlaneRef = useRef(null);
-  const earthRadiusRef = useRef(0);
-  const tilesetRef = useRef(null);
+  const clippingPlaneRef = useRef<ClippingPlane | null>(null);
+  const earthRadiusRef = useRef<number>(0);
+  const tilesetRef = useRef<any>(null);
 
   // Update tileset/scene properties when settings change
   useEffect(() => {
@@ -183,7 +183,7 @@ const CityMap = () => {
                 max="200"
                 step="1"
                 value={minHeight}
-                onChange={(e) => setMinHeight(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMinHeight(Number(e.target.value))}
                 style={{ width: '100%', accentColor: '#00ffcc' }}
               />
             </div>
@@ -200,7 +200,7 @@ const CityMap = () => {
                 max="32"
                 step="1"
                 value={sse}
-                onChange={(e) => setSse(Number(e.target.value))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSse(Number(e.target.value))}
                 style={{ width: '100%', accentColor: '#00ffcc' }}
               />
               <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
@@ -214,7 +214,7 @@ const CityMap = () => {
               <input
                 type="checkbox"
                 checked={fxaaEnabled}
-                onChange={(e) => setFxaaEnabled(e.target.checked)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFxaaEnabled(e.target.checked)}
                 style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00ffcc' }}
               />
             </div>
@@ -232,7 +232,6 @@ const CityMap = () => {
         navigationHelpButton={false}
         sceneModePicker={false}
         baseLayerPicker={false}
-        imageryProvider={false}
         requestRenderMode={true} // Optimize rendering
       >
         <ImageryLayer imageryProvider={cartoDarkMatter} />

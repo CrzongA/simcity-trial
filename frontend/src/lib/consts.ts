@@ -1,4 +1,4 @@
-export const PORTSEA_POLYGON_COORDS = [
+export const PORTSEA_POLYGON_COORDS: [number, number][] = [
     [
         -1.0427596626152251,
         50.830958237034054
