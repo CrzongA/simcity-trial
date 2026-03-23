@@ -5,10 +5,12 @@ City In Time is a web-based application that allows users to explore and simulat
 This project currently only uses Portsmouth, UK as the test city.
 
 ## 2. Key Features
-- **Timeline Interface**: Users can navigate through time using a timeline slider
-- **3D Visualization**: Users can view the city in 3D
-- **City Data**: View historical events, population data, and other relevant information for each city
-- **Responsive Design**: The application is designed to work on different devices
+- **Photorealistic 3D Map**: Uses **Google Photorealistic 3D Tiles** precisely clipped to the Portsea Island boundary.
+- **Topographic Terrain**: Integrates **Cesium World Terrain** for accurate elevation tracking across the city.
+- **Dark Matter Base**: Employs **CartoDB Dark Matter** for a sleek, high-contrast imagery base layer beneath the photorealistic meshes.
+- **Timeline Interface**: Users can navigate through time using a timeline slider.
+- **City Data**: View historical events, population data, and other relevant information for the city.
+- **Responsive Design**: The application is designed to work on different devices.
 
 ## 3. Technology Stack
 - **Frontend**: Vite (React), React Router, Redux, Material-UI, Three.js, Resium (Cesium.js)
@@ -29,12 +31,15 @@ CityInTime/
 
 ### Installation
 1. Clone the repository
-2. Install dependencies:
+2. Set up your environment variables:
+   - Create a copy of `.env.template` in the `frontend/` directory named `.env`.
+   - Add your Cesium Ion Token and Google Maps API Key to unlock the Photorealistic Tiles and World Terrain.
+3. Install dependencies:
    ```bash
    cd frontend
    npm install
    ```
-3. Start the application:
+4. Start the application:
    ```bash
    cd frontend
    npm run dev
