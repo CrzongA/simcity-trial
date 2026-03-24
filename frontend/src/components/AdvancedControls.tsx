@@ -1,4 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Math as CesiumMath } from 'cesium';
+
+interface CameraPos {
+  lon: number;
+  lat: number;
+  height: number;
+  heading: number;
+  pitch: number;
+  roll: number;
+}
 
 interface AdvancedControlsProps {
   fps: number;
@@ -12,6 +22,7 @@ interface AdvancedControlsProps {
   setFxaaEnabled: (v: boolean) => void;
   waterOpacity: number;
   setWaterOpacity: (v: number) => void;
+  viewerRef: React.MutableRefObject<any>;
 }
 
 export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
@@ -20,9 +31,50 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   resolutionScale, setResolutionScale,
   sse, setSse,
   fxaaEnabled, setFxaaEnabled,
-  waterOpacity, setWaterOpacity
+  waterOpacity, setWaterOpacity,
+  viewerRef
 }) => {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
+  const [cameraPos, setCameraPos] = useState<CameraPos | null>(null);
+  const [copied, setCopied] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isAdvancedOpen) {
+      const poll = () => {
+        const viewer = viewerRef.current?.cesiumElement;
+        if (!viewer || viewer.isDestroyed()) return;
+        const cam = viewer.camera;
+        const carto = cam.positionCartographic;
+        if (!carto) return;
+        setCameraPos({
+          lon: parseFloat(CesiumMath.toDegrees(carto.longitude).toFixed(6)),
+          lat: parseFloat(CesiumMath.toDegrees(carto.latitude).toFixed(6)),
+          height: parseFloat(carto.height.toFixed(2)),
+          heading: parseFloat(CesiumMath.toDegrees(cam.heading).toFixed(2)),
+          pitch: parseFloat(CesiumMath.toDegrees(cam.pitch).toFixed(2)),
+          roll: parseFloat(CesiumMath.toDegrees(cam.roll).toFixed(2)),
+        });
+      };
+      poll();
+      intervalRef.current = setInterval(poll, 200);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isAdvancedOpen]);
+
+  const flyToSnippet = cameraPos
+    ? `viewer.camera.flyTo({\n  destination: Cesium.Cartesian3.fromDegrees(\n    ${cameraPos.lon}, ${cameraPos.lat}, ${cameraPos.height}\n  ),\n  orientation: {\n    heading: Cesium.Math.toRadians(${cameraPos.heading}),\n    pitch:   Cesium.Math.toRadians(${cameraPos.pitch}),\n    roll:    Cesium.Math.toRadians(${cameraPos.roll}),\n  }\n});`
+    : '';
+
+  const handleCopy = () => {
+    if (!flyToSnippet) return;
+    navigator.clipboard.writeText(flyToSnippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
 
   return (
     <div style={{
@@ -67,6 +119,56 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
 
       {isAdvancedOpen && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
+
+          {/* Camera Position */}
+          {cameraPos && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', fontWeight: 'bold', color: '#aaa', letterSpacing: '0.4px' }}>
+                <span>📍 CAMERA POSITION</span>
+                <button
+                  onClick={handleCopy}
+                  title="Copy flyTo() snippet"
+                  style={{
+                    background: copied ? '#00ffcc22' : 'rgba(255,255,255,0.07)',
+                    border: `1px solid ${copied ? '#00ffcc' : 'rgba(255,255,255,0.15)'}`,
+                    color: copied ? '#00ffcc' : '#ccc',
+                    borderRadius: '4px',
+                    padding: '2px 7px',
+                    fontSize: '10px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {copied ? '✓ Copied!' : 'Copy flyTo()'}
+                </button>
+              </div>
+              <div style={{
+                background: 'rgba(0,0,0,0.4)',
+                borderRadius: '6px',
+                padding: '8px 10px',
+                fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                fontSize: '11px',
+                lineHeight: '1.7',
+                color: '#e0e0e0',
+                border: '1px solid rgba(255,255,255,0.08)'
+              }}>
+                {([
+                  ['lon',     cameraPos.lon,     '°'],
+                  ['lat',     cameraPos.lat,     '°'],
+                  ['height',  cameraPos.height,  ' m'],
+                  ['heading', cameraPos.heading, '°'],
+                  ['pitch',   cameraPos.pitch,   '°'],
+                  ['roll',    cameraPos.roll,    '°'],
+                ] as [string, number, string][]).map(([key, val, unit]) => (
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#888' }}>{key}</span>
+                    <span style={{ color: '#00ffcc' }}>{val}{unit}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* FPS Display */}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold' }}>
             <label>Current FPS</label>

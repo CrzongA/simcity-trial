@@ -24,8 +24,8 @@ if (import.meta.env.VITE_CESIUM_ION_TOKEN) {
 }
 
 // Portsmouth coordinates
-const PORTSMOUTH_LON = -1.0856;
-const PORTSMOUTH_LAT = 50.7990;
+const PORTSMOUTH_LON = -1.1088475841206984;
+const PORTSMOUTH_LAT = 50.795478268951065;
 const HEIGHT = 1500; // meters
 
 const cartoDarkMatter = new UrlTemplateImageryProvider({
@@ -37,8 +37,8 @@ const cartoDarkMatter = new UrlTemplateImageryProvider({
 const CityMap = () => {
   const viewerRef = useRef<any>(null);
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
-  const [floodHeight, setFloodHeight] = useState<number>(10);
-  const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(10);
+  const [floodHeight, setFloodHeight] = useState<number>(0);
+  const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(0);
   const [sse, setSse] = useState<number>(20);
   const [fxaaEnabled, setFxaaEnabled] = useState<boolean>(true);
   const [resolutionScale, setResolutionScale] = useState<number>(0.9);
@@ -240,14 +240,24 @@ const CityMap = () => {
       if (viewer && viewer.scene && !viewer.isDestroyed()) {
         // Init camera position once on load to prevent jumping when UI state changes
         viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, HEIGHT),
+          destination: Cartesian3.fromDegrees(
+            -1.114619, 50.792307, 182.83
+          ),
           orientation: {
-            heading: CesiumMath.toRadians(0.0),
-            pitch: CesiumMath.toRadians(-45.0),
-            roll: 0.0
-          },
-          duration: 0
+            heading: CesiumMath.toRadians(58.79),
+            pitch: CesiumMath.toRadians(-6.83),
+            roll: CesiumMath.toRadians(0),
+          }
         });
+        // viewer.camera.flyTo({
+        //   destination: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, HEIGHT),
+        //   orientation: {
+        //     heading: CesiumMath.toRadians(80.0),
+        //     pitch: CesiumMath.toRadians(-45.0),
+        //     roll: 0.0
+        //   },
+        //   duration: 0
+        // });
 
         viewer.terrainProvider = terrain;
         viewer.scene.globe.depthTestAgainstTerrain = true; // Required for proper object rendering over terrain
@@ -289,20 +299,20 @@ const CityMap = () => {
             setBaseHeight(h);
 
             if (!viewer.isDestroyed()) {
-              // Diagnostic label
-              viewer.entities.add({
-                position: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, h + 80),
-                label: {
-                  text: `Base: ${h.toFixed(1)}m`,
-                  font: '14px sans-serif',
-                  fillColor: Color.AQUA,
-                  outlineColor: Color.BLACK,
-                  outlineWidth: 2,
-                  style: 2,
-                  verticalOrigin: VerticalOrigin.BOTTOM,
-                  disableDepthTestDistance: Number.POSITIVE_INFINITY
-                }
-              });
+              // // Diagnostic label
+              // viewer.entities.add({
+              //   position: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, h + 80),
+              //   label: {
+              //     text: `Base: ${h.toFixed(1)}m`,
+              //     font: '14px sans-serif',
+              //     fillColor: Color.AQUA,
+              //     outlineColor: Color.BLACK,
+              //     outlineWidth: 2,
+              //     style: 2,
+              //     verticalOrigin: VerticalOrigin.BOTTOM,
+              //     disableDepthTestDistance: Number.POSITIVE_INFINITY
+              //   }
+              // });
 
               // Flood water volume
               if (!waterEntityRef.current) {
@@ -377,6 +387,7 @@ const CityMap = () => {
         sse={sse} setSse={setSse}
         fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
         waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
+        viewerRef={viewerRef}
       />
 
       {/* --- Overlay UI --- */}
