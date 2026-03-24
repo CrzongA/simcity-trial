@@ -5,6 +5,8 @@ interface BillboardsOverlayProps {
   billboards: BillboardData[];
   setBillboards: React.Dispatch<React.SetStateAction<BillboardData[]>>;
   billboardsRef: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+  onDragStart: (id: string) => void;
+  onTogglePin: (id: string) => void;
   requestRender: () => void;
 }
 
@@ -12,6 +14,8 @@ export const BillboardsOverlay: React.FC<BillboardsOverlayProps> = ({
   billboards,
   setBillboards,
   billboardsRef,
+  onDragStart,
+  onTogglePin,
   requestRender,
 }) => {
   return (
@@ -22,6 +26,10 @@ export const BillboardsOverlay: React.FC<BillboardsOverlayProps> = ({
           ref={el => {
             if (el) billboardsRef.current.set(b.id, el);
             else billboardsRef.current.delete(b.id);
+          }}
+          onMouseDown={e => {
+            // Only left-click drag
+            if (e.button === 0) onDragStart(b.id);
           }}
           style={{
             position: 'absolute',
@@ -39,25 +47,51 @@ export const BillboardsOverlay: React.FC<BillboardsOverlayProps> = ({
             minWidth: '220px',
             maxWidth: '300px',
             display: 'none', // Shown by preRender listener
+            cursor: 'move',
+            userSelect: 'none',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Location Info</div>
-            <div
-              onClick={() => {
-                setBillboards(prev => prev.filter(x => x.id !== b.id));
-                setTimeout(() => requestRender(), 50);
-              }}
-              style={{ cursor: 'pointer', opacity: 0.7, padding: '4px', marginTop: '-4px', marginRight: '-4px' }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
-            >
-              ✕
+            <div style={{ display: 'flex', gap: '8px', marginTop: '-4px', marginRight: '-4px' }}>
+              <button
+                onClick={() => onTogglePin(b.id)}
+                title={b.isPinned ? "Unpin measurement" : "Pin measurement"}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '4px',
+                  opacity: b.isPinned ? 1 : 0.4,
+                  filter: b.isPinned ? 'none' : 'grayscale(100%)',
+                  transition: 'all 0.2s ease',
+                  pointerEvents: 'auto',
+                }}
+              >
+                📌
+              </button>
+              <div
+                onClick={() => {
+                  setBillboards(prev => prev.filter(x => x.id !== b.id));
+                  setTimeout(() => requestRender(), 50);
+                }}
+                style={{ cursor: 'pointer', opacity: 0.7, padding: '4px', fontSize: '14px' }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+              >
+                ✕
+              </div>
             </div>
           </div>
           <div style={{ fontSize: '13px', color: '#ccc', marginBottom: '4px' }}>
             <strong style={{ color: '#00ffcc' }}>Terrain Height:</strong> {b.height}m (MSL)
           </div>
+          {b.buildingHeight !== undefined && b.buildingHeight > 0 && (
+            <div style={{ fontSize: '13px', color: '#ccc', marginBottom: '4px' }}>
+              <strong style={{ color: '#00ffcc' }}>Building Height:</strong> {b.buildingHeight}m
+            </div>
+          )}
           <div style={{ fontSize: '13px', color: '#ccc' }}>
             <strong style={{ color: '#00ffcc' }}>Location:</strong> {b.loading ? 'Fetching...' : b.locationName}
           </div>

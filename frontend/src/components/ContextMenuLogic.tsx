@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useCesium } from 'resium';
 import {
   Color,
@@ -6,7 +6,8 @@ import {
   SceneTransforms,
   ScreenSpaceEventType,
   ScreenSpaceEventHandler,
-  CameraEventType
+  CameraEventType,
+  CallbackProperty
 } from 'cesium';
 import type { BillboardData } from './CityMap';
 
@@ -22,6 +23,9 @@ export const ContextMenuLogic = ({
 }) => {
   const { viewer } = useCesium();
 
+  const billboardsRefState = useRef<BillboardData[]>(billboards);
+  useEffect(() => { billboardsRefState.current = billboards; }, [billboards]);
+
   // Draw Lines and Points Imperatively
   useEffect(() => {
     if (!viewer) return;
@@ -30,9 +34,17 @@ export const ContextMenuLogic = ({
     billboards.forEach(b => {
       const entity = viewer.entities.add({
         id: `line-${b.id}`,
-        position: b.surfaceCartesian,
+        // Use CallbackProperty so the visual updates smoothly during drag
+        position: new CallbackProperty(() => {
+          const current = billboardsRefState.current.find((x: BillboardData) => x.id === b.id);
+          return current?.surfaceCartesian || b.surfaceCartesian;
+        }, false) as any,
         polyline: {
-          positions: [b.cartesian, b.surfaceCartesian],
+          positions: new CallbackProperty(() => {
+            const current = billboardsRefState.current.find((x: BillboardData) => x.id === b.id);
+            if (!current) return [b.cartesian, b.surfaceCartesian];
+            return [current.cartesian, current.surfaceCartesian];
+          }, false) as any,
           width: 4,
           material: Color.fromCssColorString('#00ffcc').withAlpha(0.7),
           depthFailMaterial: Color.fromCssColorString('#00ffcc').withAlpha(0.7),

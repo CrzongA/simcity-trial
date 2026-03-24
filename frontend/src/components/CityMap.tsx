@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Viewer, ImageryLayer, Entity } from 'resium';
+import { Viewer, Entity } from 'resium';
 import { ContextMenuLogic } from './ContextMenuLogic';
 import { AdvancedControls } from './AdvancedControls';
 import { ContextMenuPopup } from './ContextMenuPopup';
 import { BillboardsOverlay } from './BillboardsOverlay';
-import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, UrlTemplateImageryProvider, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty } from 'cesium';
+import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests } from 'cesium';
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
+import { BaseMapControls } from './BaseMapControls';
 
 export interface BillboardData {
   id: string;
@@ -14,6 +15,8 @@ export interface BillboardData {
   surfaceCartesian: Cartesian3; // Ground level point
   locationName: string;
   height: number;
+  buildingHeight?: number;
+  isPinned: boolean;
   loading: boolean;
 }
 
@@ -28,11 +31,8 @@ const PORTSMOUTH_LON = -1.1088475841206984;
 const PORTSMOUTH_LAT = 50.795478268951065;
 const HEIGHT = 1500; // meters
 
-const cartoDarkMatter = new UrlTemplateImageryProvider({
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-  credit: 'Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
-  subdomains: ['a', 'b', 'c', 'd']
-});
+// CartoDB imagery layer removed — globe.baseColor is used instead to avoid
+// z-fighting / clipping through the photorealistic tiles.
 
 const CityMap = () => {
   const viewerRef = useRef<any>(null);
@@ -59,6 +59,7 @@ const CityMap = () => {
   // -- Context Menu and Billboard State --
   const [contextMenu, setContextMenu] = useState<{ show: boolean, x: number, y: number, cartesian: Cartesian3 | null }>({ show: false, x: 0, y: 0, cartesian: null });
   const [billboards, setBillboards] = useState<BillboardData[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const billboardsRef = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
@@ -76,15 +77,56 @@ const CityMap = () => {
     return "Unknown Location";
   };
 
+  // Google Elevation API returns heights above EGM96 geoid (≈ mean sea level).
+  // sampleTerrainMostDetailed returns WGS84 ellipsoid heights, which differ by
+  // ~47 m at Portsmouth — so we always use this for the displayed value.
+  const fetchMslElevation = async (lat: number, lng: number): Promise<number | null> => {
+    try {
+      const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!key) return null;
+      const res = await fetch(
+        `https://maps.googleapis.com/maps/api/elevation/json?locations=${lat},${lng}&key=${key}`
+      );
+      const data = await res.json();
+      if (data.results?.[0]?.elevation !== undefined) return data.results[0].elevation;
+    } catch (e) {
+      console.warn('Elevation API failed', e);
+    }
+    return null;
+  };
+
   const handleShowDetails = async () => {
     if (!contextMenu.cartesian) return;
 
     const carto = Cartographic.fromCartesian(contextMenu.cartesian);
     const lat = CesiumMath.toDegrees(carto.latitude);
     const lng = CesiumMath.toDegrees(carto.longitude);
-    const height = carto.height;
 
-    // Create new point 200m hovering
+    // Original height from the picked scene (building rooftop or ground)
+    const pickedHeight = carto.height;
+
+    // Sample true terrain height at this position.
+    // globe.clippingPolygons only affects rendering — terrain data is still
+    // fully queryable via sampleTerrainMostDetailed even inside Portsmouth.
+    // We prefer this over carto.height, which inside Portsmouth would return
+    // the photorealistic tile surface (building/road), not ground elevation.
+    let height = pickedHeight; // fallback
+    if (terrainProvider) {
+      try {
+        const sampled = await sampleTerrainMostDetailed(terrainProvider, [
+          Cartographic.fromDegrees(lng, lat)
+        ]);
+        if (sampled[0]?.height !== undefined) height = sampled[0].height;
+      } catch {
+        // terrain sampling failed — pickedHeight fallback remains
+      }
+    }
+
+    // Building height is the difference between the picked surface and the ground.
+    // If we clicked the ground, building height will be ~0.
+    const buildingHeight = Math.max(0, pickedHeight - height);
+
+    // Create new point 400m hovering above true terrain height
     const hoveringCartesian = Cartesian3.fromRadians(carto.longitude, carto.latitude, height + 400);
     const surfaceCartesian = Cartesian3.fromRadians(carto.longitude, carto.latitude, height);
     const newId = Date.now().toString();
@@ -95,6 +137,8 @@ const CityMap = () => {
       surfaceCartesian: surfaceCartesian,
       locationName: "Fetching...",
       height: Math.round(height),
+      buildingHeight: Math.round(buildingHeight),
+      isPinned: true,
       loading: true
     }]);
 
@@ -107,16 +151,139 @@ const CityMap = () => {
     }, 100);
     setTimeout(() => clearInterval(interval), 1000);
 
-    const locName = await fetchLocationName(lat, lng);
+    // Fire geocoding + MSL elevation in parallel — no added wait time
+    const [locName, mslElevation] = await Promise.all([
+      fetchLocationName(lat, lng),
+      fetchMslElevation(lat, lng),
+    ]);
+
+    // Prefer Google Elevation (MSL/EGM96). Fall back to ellipsoid height minus
+    // approximate geoid undulation for Portsmouth (~47 m) if API unavailable.
+    const displayHeight = mslElevation !== null
+      ? Math.round(mslElevation)
+      : Math.round(height - 47);
 
     setBillboards(prev => {
-      // Force a re-render hook so Cesium catches the state transition from loading to loaded
       setTimeout(() => {
         const viewer = viewerRef.current?.cesiumElement;
         if (viewer && !viewer.isDestroyed()) viewer.scene.requestRender();
       }, 50);
-      return prev.map(b => b.id === newId ? { ...b, locationName: locName, loading: false } : b);
+      return prev.map(b => b.id === newId ? { ...b, locationName: locName, height: displayHeight, loading: false } : b);
     });
+  };
+
+  const handleTogglePin = (id: string) => {
+    setBillboards(prev => prev.map(b => b.id === id ? { ...b, isPinned: !b.isPinned } : b));
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer) viewer.scene.requestRender();
+  };
+
+  const handleDragStart = (id: string) => {
+    setDraggingId(id);
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer) {
+      viewer.scene.screenSpaceCameraController.enableInputs = false;
+    }
+  };
+
+  const handleDragMove = async (e: React.MouseEvent) => {
+    if (!draggingId || !viewerRef.current?.cesiumElement) return;
+    const viewer = viewerRef.current.cesiumElement;
+    const billboard = billboards.find(b => b.id === draggingId);
+    if (!billboard) return;
+
+    const mousePos = new Cartesian2(e.clientX, e.clientY);
+    const ray = viewer.camera.getPickRay(mousePos);
+    if (!ray) return;
+
+    // Get current altitude from the billboard's cartesian
+    const carto = Cartographic.fromCartesian(billboard.cartesian);
+    const altitude = carto.height;
+
+    // Drag on a plane horizontal to the current position (Tangent Plane at altitude)
+    const normal = Ellipsoid.WGS84.geodeticSurfaceNormal(billboard.cartesian);
+    const dragPlane = Plane.fromPointNormal(billboard.cartesian, normal);
+
+    const newPos = IntersectionTests.rayPlane(ray, dragPlane);
+    if (!newPos) return;
+
+    if (billboard.isPinned) {
+      // If pinned, only update the billboard's position, surfaceCartesian stays locked.
+      setBillboards(prev => prev.map(b => b.id === draggingId ? {
+        ...b,
+        cartesian: newPos
+      } : b));
+    } else {
+      // If NOT pinned, update both as before (label follows ground point)
+      const newCarto = Cartographic.fromCartesian(newPos);
+      const lng = CesiumMath.toDegrees(newCarto.longitude);
+      const lat = CesiumMath.toDegrees(newCarto.latitude);
+
+      let terrainHeight = 0;
+      if (terrainProvider) {
+        try {
+          const sampled = await sampleTerrainMostDetailed(terrainProvider, [
+            Cartographic.fromDegrees(lng, lat)
+          ]);
+          if (sampled[0]?.height !== undefined) terrainHeight = sampled[0].height;
+        } catch (err) {
+          terrainHeight = billboard.height; // fallback if sampling fails mid-drag
+        }
+      }
+
+      const newSurfacePos = Cartesian3.fromRadians(newCarto.longitude, newCarto.latitude, terrainHeight);
+
+      setBillboards(prev => prev.map(b => b.id === draggingId ? {
+        ...b,
+        cartesian: newPos,
+        surfaceCartesian: newSurfacePos,
+        locationName: "Moving...",
+        loading: true
+      } : b));
+    }
+
+    viewer.scene.requestRender();
+  };
+
+  const handleDragEnd = async () => {
+    if (!draggingId || !viewerRef.current?.cesiumElement) return;
+    const id = draggingId;
+    setDraggingId(null);
+    const viewer = viewerRef.current.cesiumElement;
+    viewer.scene.screenSpaceCameraController.enableInputs = true;
+
+    // Update the final location details
+    const billboard = billboards.find(b => b.id === id);
+    if (!billboard) return;
+
+    // If pinned, skip re-sampling since the ground point didn't move
+    if (billboard.isPinned) {
+      setBillboards(prev => prev.map(b => b.id === id ? { ...b, loading: false } : b));
+      viewer.scene.requestRender();
+      return;
+    }
+
+    const carto = Cartographic.fromCartesian(billboard.cartesian);
+    const lat = CesiumMath.toDegrees(carto.latitude);
+    const lng = CesiumMath.toDegrees(carto.longitude);
+
+    const [locName, mslElevation] = await Promise.all([
+      fetchLocationName(lat, lng),
+      fetchMslElevation(lat, lng),
+    ]);
+
+    const displayHeight = mslElevation !== null
+      ? Math.round(mslElevation)
+      : Math.round(carto.height - 400 - 47); // fallback logic
+
+    setBillboards(prev => prev.map(b => b.id === id ? {
+      ...b,
+      locationName: locName,
+      height: displayHeight,
+      loading: false
+    } : b));
+
+    viewer.scene.requestRender();
   };
 
   // Update tileset/scene properties when settings change
@@ -282,7 +449,14 @@ const CityMap = () => {
         // });
 
         viewer.terrainProvider = terrain;
-        viewer.scene.globe.depthTestAgainstTerrain = true; // Required for proper object rendering over terrain
+        viewer.scene.globe.depthTestAgainstTerrain = true;
+
+        // Remove Cesium's auto-added default imagery (Bing satellite via Ion).
+        // BaseMapControls manages all imagery layers imperatively.
+        viewer.imageryLayers.removeAll();
+
+        // Default dark base colour — no imagery, no z-fighting with photorealistic tiles.
+        viewer.scene.globe.baseColor = Color.fromCssColorString('#101217');
 
         const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -305,8 +479,16 @@ const CityMap = () => {
             inverse: true // Clip OUTSIDE the polygon
           });
 
-          // Globe clipping and vertical clipping planes remain disabled for the volume approach
-          viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection();
+          // Hide the globe terrain mesh inside Portsmouth so the dark base colour
+          // cannot bleed through gaps in the photorealistic tile geometry.
+          // The tileset fully covers this area, so there is no visible void.
+          // The water entity uses absolute sampled heights and is unaffected.
+          viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection({
+            polygons: [
+              new ClippingPolygon({ positions: polygonPositionsForWater })
+            ],
+            // inverse: false (default) → terrain hidden INSIDE the polygon
+          });
           tileset.clippingPlanes = new ClippingPlaneCollection();
           // Elevation/Volume based flooding approach
           // Sample terrain height at the center of Portsmouth to offset the water volume correctly
@@ -378,7 +560,13 @@ const CityMap = () => {
   }, []);
 
   return (
-    <div style={{ width: '100%', height: '100%' }} onContextMenu={e => e.preventDefault()}>
+    <div
+      style={{ width: '100%', height: '100%' }}
+      onContextMenu={e => e.preventDefault()}
+      onMouseMove={draggingId ? handleDragMove : undefined}
+      onMouseUp={draggingId ? handleDragEnd : undefined}
+      onMouseLeave={draggingId ? handleDragEnd : undefined}
+    >
       <Viewer
         full
         ref={viewerRef}
@@ -394,13 +582,14 @@ const CityMap = () => {
       >
         <ContextMenuLogic setContextMenu={setContextMenu} billboards={billboards} billboardsRef={billboardsRef} />
 
-        {/* Lines now drawn imperatively inside ContextMenuLogic */}
-        <ImageryLayer imageryProvider={cartoDarkMatter} />
+        {/* Imagery layer removed; globe.baseColor provides the dark background */}
 
         {/* All entities are managed imperatively via viewer.entities for requestRenderMode compatibility */}
       </Viewer>
 
       <SimulationControls floodHeight={floodHeight} setFloodHeight={setFloodHeight} />
+
+      <BaseMapControls viewerRef={viewerRef} />
 
       <AdvancedControls
         fps={fps}
@@ -422,6 +611,8 @@ const CityMap = () => {
         billboards={billboards}
         setBillboards={setBillboards}
         billboardsRef={billboardsRef}
+        onDragStart={handleDragStart}
+        onTogglePin={handleTogglePin}
         requestRender={() => {
           const viewer = viewerRef.current?.cesiumElement;
           if (viewer && !viewer.isDestroyed()) viewer.scene.requestRender();
