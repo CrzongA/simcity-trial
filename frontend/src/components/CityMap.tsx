@@ -232,11 +232,17 @@ const CityMap = () => {
       }
 
       const newSurfacePos = Cartesian3.fromRadians(newCarto.longitude, newCarto.latitude, terrainHeight);
+      
+      // Calculate real-time readings during drag
+      const mslHeight = Math.round(terrainHeight - 47);
+      const bHeight = Math.max(0, Math.round(altitude - terrainHeight));
 
       setBillboards(prev => prev.map(b => b.id === draggingId ? {
         ...b,
         cartesian: newPos,
         surfaceCartesian: newSurfacePos,
+        height: mslHeight,
+        buildingHeight: bHeight,
         locationName: "Moving...",
         loading: true
       } : b));
