@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Viewer, ImageryLayer } from 'resium';
 import { ContextMenuLogic } from './ContextMenuLogic';
-import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, UrlTemplateImageryProvider, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType } from 'cesium';
+import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, UrlTemplateImageryProvider, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms } from 'cesium';
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
 
 export interface BillboardData {
@@ -34,13 +34,17 @@ const CityMap = () => {
   const viewerRef = useRef<any>(null);
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
   const [minHeight, setMinHeight] = useState<number>(10);
-  const [sse, setSse] = useState<number>(4);
+  const [sse, setSse] = useState<number>(20);
   const [fxaaEnabled, setFxaaEnabled] = useState<boolean>(true);
+  const [resolutionScale, setResolutionScale] = useState<number>(0.9);
+  const [optimizeVisuals, setOptimizeVisuals] = useState<boolean>(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
 
   const clippingPlaneRef = useRef<ClippingPlane | null>(null);
   const earthRadiusRef = useRef<number>(0);
   const tilesetRef = useRef<any>(null);
+
+  const [fps, setFps] = useState<number>(0);
 
   // -- Context Menu and Billboard State --
   const [contextMenu, setContextMenu] = useState<{ show: boolean, x: number, y: number, cartesian: Cartesian3 | null }>({ show: false, x: 0, y: 0, cartesian: null });
@@ -107,6 +111,37 @@ const CityMap = () => {
 
   // Update tileset/scene properties when settings change
   useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let postRenderListener: () => void;
+
+    const setupFpsTracker = setInterval(() => {
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && viewer.scene) {
+        clearInterval(setupFpsTracker);
+        postRenderListener = () => {
+          frameCount++;
+          const now = performance.now();
+          if (now - lastTime >= 1000) {
+            setFps(Math.round((frameCount * 1000) / (now - lastTime)));
+            frameCount = 0;
+            lastTime = now;
+          }
+        };
+        viewer.scene.postRender.addEventListener(postRenderListener);
+      }
+    }, 500);
+
+    return () => {
+      clearInterval(setupFpsTracker);
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && viewer.scene && postRenderListener) {
+        viewer.scene.postRender.removeEventListener(postRenderListener);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (tilesetRef.current) {
       tilesetRef.current.maximumScreenSpaceError = sse;
     }
@@ -118,8 +153,8 @@ const CityMap = () => {
   }, [sse, fxaaEnabled]);
 
   useEffect(() => {
-    if (tilesetRef.current && tilesetRef.current.customShader && earthRadiusRef.current !== 0) {
-      tilesetRef.current.customShader.setUniform('u_minDistance', earthRadiusRef.current + minHeight);
+    if (clippingPlaneRef.current) {
+      clippingPlaneRef.current.distance = -minHeight;
 
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && !viewer.isDestroyed()) {
@@ -127,6 +162,30 @@ const CityMap = () => {
       }
     }
   }, [minHeight]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer) {
+      viewer.resolutionScale = resolutionScale;
+      viewer.scene.requestRender();
+    }
+  }, [resolutionScale]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && viewer.scene) {
+      if (optimizeVisuals) {
+        viewer.shadows = false;
+        viewer.scene.fog.enabled = false;
+        viewer.scene.skyAtmosphere.show = false;
+        viewer.scene.globe.showWaterEffect = false;
+      } else {
+        viewer.scene.fog.enabled = true;
+        viewer.scene.skyAtmosphere.show = true;
+      }
+      viewer.scene.requestRender();
+    }
+  }, [optimizeVisuals]);
 
   useEffect(() => {
     let isMounted = true;
@@ -183,30 +242,17 @@ const CityMap = () => {
             ]
           });
 
-          // Add height clipping via custom shader (ClippingPlane and ClippingPolygon cannot be mixed)
+          // Height clipping via ClippingPlane
           const center = Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT);
-          const normal = Cartesian3.normalize(center, new Cartesian3());
           earthRadiusRef.current = Cartesian3.magnitude(center);
 
-          tileset.customShader = new CustomShader({
-            uniforms: {
-              u_minDistance: {
-                type: UniformType.FLOAT,
-                value: earthRadiusRef.current + minHeight
-              },
-              u_normal: {
-                type: UniformType.VEC3,
-                value: normal
-              }
-            },
-            fragmentShaderText: `
-              void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
-                float dist = dot(fsInput.attributes.positionWC, u_normal);
-                if (dist < u_minDistance) {
-                  discard;
-                }
-              }
-            `
+          const clippingPlane = new ClippingPlane(new Cartesian3(0.0, 0.0, 1.0), -minHeight);
+          clippingPlaneRef.current = clippingPlane;
+
+          tileset.clippingPlanes = new ClippingPlaneCollection({
+            modelMatrix: Transforms.eastNorthUpToFixedFrame(center),
+            planes: [clippingPlane],
+            edgeWidth: 0.0
           });
 
           // Initial setup of SSE and FXAA
@@ -289,6 +335,43 @@ const CityMap = () => {
 
         {isAdvancedOpen && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
+            {/* FPS Display */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold' }}>
+              <label>Current FPS</label>
+              <span style={{ color: fps < 30 ? '#ff4d4d' : '#00ffcc' }}>{fps > 0 ? fps : '--'}</span>
+            </div>
+
+            {/* Optimize Visuals Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <label>Optimize Visuals (Fast Render)</label>
+              <input
+                type="checkbox"
+                checked={optimizeVisuals}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOptimizeVisuals(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00ffcc' }}
+              />
+            </div>
+
+            {/* Resolution Scale Control */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <label>Resolution Scale</label>
+                <span style={{ color: '#00ffcc' }}>{resolutionScale.toFixed(2)}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.05"
+                value={resolutionScale}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setResolutionScale(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#00ffcc' }}
+              />
+              <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
+                Lower = Higher FPS (Recommended: 0.75x for High DPI)
+              </div>
+            </div>
+
             {/* Height Control */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
