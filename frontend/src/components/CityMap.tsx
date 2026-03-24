@@ -39,11 +39,13 @@ const CityMap = () => {
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
   const [floodHeight, setFloodHeight] = useState<number>(0);
   const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(0);
-  const [sse, setSse] = useState<number>(20);
+  const [sse, setSse] = useState<number>(16);
+  const [autoSse, setAutoSse] = useState<boolean>(true);
+  const autoSseRef = useRef<boolean>(true);
   const [fxaaEnabled, setFxaaEnabled] = useState<boolean>(true);
   const [resolutionScale, setResolutionScale] = useState<number>(0.9);
   const [optimizeVisuals, setOptimizeVisuals] = useState<boolean>(false);
-  const [waterOpacity, setWaterOpacity] = useState<number>(0.7);
+  const [waterOpacity, setWaterOpacity] = useState<number>(0.8);
   const [baseHeight, setBaseHeight] = useState<number>(0);
 
   const tilesetRef = useRef<any>(null);
@@ -123,6 +125,12 @@ const CityMap = () => {
     let lastTime = performance.now();
     let postRenderListener: () => void;
 
+    const getAutoSse = (heightM: number): number => {
+      if (heightM < 3000) return 16;
+      if (heightM < 6000) return 10;
+      return 2;
+    };
+
     const setupFpsTracker = setInterval(() => {
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && viewer.scene) {
@@ -134,6 +142,16 @@ const CityMap = () => {
             setFps(Math.round((frameCount * 1000) / (now - lastTime)));
             frameCount = 0;
             lastTime = now;
+          }
+
+          // Dynamic SSE based on camera height
+          if (autoSseRef.current && tilesetRef.current) {
+            const h = viewer.camera.positionCartographic?.height ?? 0;
+            const targetSse = getAutoSse(h);
+            if (tilesetRef.current.maximumScreenSpaceError !== targetSse) {
+              tilesetRef.current.maximumScreenSpaceError = targetSse;
+              setSse(targetSse); // keep slider in sync
+            }
           }
         };
         viewer.scene.postRender.addEventListener(postRenderListener);
@@ -149,8 +167,12 @@ const CityMap = () => {
     };
   }, []);
 
+  // Sync autoSse ref so postRender closure reads the latest value
+  useEffect(() => { autoSseRef.current = autoSse; }, [autoSse]);
+
   useEffect(() => {
-    if (tilesetRef.current) {
+    // SSE slider only applies in manual mode
+    if (!autoSse && tilesetRef.current) {
       tilesetRef.current.maximumScreenSpaceError = sse;
     }
     const viewer = viewerRef.current?.cesiumElement;
@@ -158,7 +180,7 @@ const CityMap = () => {
       viewer.scene.postProcessStages.fxaa.enabled = fxaaEnabled;
       viewer.scene.requestRender();
     }
-  }, [sse, fxaaEnabled]);
+  }, [sse, fxaaEnabled, autoSse]);
 
   // Smooth animation for floodHeight
   useEffect(() => {
@@ -385,6 +407,7 @@ const CityMap = () => {
         optimizeVisuals={optimizeVisuals} setOptimizeVisuals={setOptimizeVisuals}
         resolutionScale={resolutionScale} setResolutionScale={setResolutionScale}
         sse={sse} setSse={setSse}
+        autoSse={autoSse} setAutoSse={(v) => { setAutoSse(v); autoSseRef.current = v; }}
         fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
         waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
         viewerRef={viewerRef}

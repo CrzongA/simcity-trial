@@ -18,6 +18,8 @@ interface AdvancedControlsProps {
   setResolutionScale: (v: number) => void;
   sse: number;
   setSse: (v: number) => void;
+  autoSse: boolean;
+  setAutoSse: (v: boolean) => void;
   fxaaEnabled: boolean;
   setFxaaEnabled: (v: boolean) => void;
   waterOpacity: number;
@@ -30,6 +32,7 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   optimizeVisuals, setOptimizeVisuals,
   resolutionScale, setResolutionScale,
   sse, setSse,
+  autoSse, setAutoSse,
   fxaaEnabled, setFxaaEnabled,
   waterOpacity, setWaterOpacity,
   viewerRef
@@ -208,9 +211,22 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
 
           {/* SSE / Detail Level Control */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
               <label>Detail Level (SSE)</label>
-              <span style={{ color: '#00ffcc' }}>{sse}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: autoSse ? '#00ffcc' : '#888', fontSize: '10px' }}>
+                  {autoSse ? `auto (${sse})` : sse}
+                </span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', fontSize: '10px', color: '#aaa' }}>
+                  <input
+                    type="checkbox"
+                    checked={autoSse}
+                    onChange={(e) => setAutoSse(e.target.checked)}
+                    style={{ width: '13px', height: '13px', accentColor: '#00ffcc' }}
+                  />
+                  auto
+                </label>
+              </div>
             </div>
             <input
               type="range"
@@ -218,11 +234,14 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
               max="32"
               step="1"
               value={sse}
+              disabled={autoSse}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSse(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#00ffcc' }}
+              style={{ width: '100%', accentColor: '#00ffcc', opacity: autoSse ? 0.35 : 1, cursor: autoSse ? 'not-allowed' : 'pointer' }}
             />
             <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
-              Lower = Higher Detail (Fixes "Jagged" tiles)
+              {autoSse
+                ? 'Auto: 16 (0–3km) · 10 (3–6km) · 2 (6km+)'
+                : 'Lower = Higher Detail (Fixes "Jagged" tiles)'}
             </div>
           </div>
 
