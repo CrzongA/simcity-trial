@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Viewer, ImageryLayer } from 'resium';
+import { Viewer, ImageryLayer, Entity } from 'resium';
 import { ContextMenuLogic } from './ContextMenuLogic';
 import { AdvancedControls } from './AdvancedControls';
 import { ContextMenuPopup } from './ContextMenuPopup';
 import { BillboardsOverlay } from './BillboardsOverlay';
-import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, UrlTemplateImageryProvider, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms } from 'cesium';
+import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, UrlTemplateImageryProvider, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty } from 'cesium';
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
+import { SimulationControls } from './SimulationControls';
 
 export interface BillboardData {
   id: string;
@@ -36,15 +37,20 @@ const cartoDarkMatter = new UrlTemplateImageryProvider({
 const CityMap = () => {
   const viewerRef = useRef<any>(null);
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
-  const [minHeight, setMinHeight] = useState<number>(10);
+  const [floodHeight, setFloodHeight] = useState<number>(10);
+  const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(10);
   const [sse, setSse] = useState<number>(20);
   const [fxaaEnabled, setFxaaEnabled] = useState<boolean>(true);
   const [resolutionScale, setResolutionScale] = useState<number>(0.9);
   const [optimizeVisuals, setOptimizeVisuals] = useState<boolean>(false);
+  const [waterOpacity, setWaterOpacity] = useState<number>(0.7);
+  const [baseHeight, setBaseHeight] = useState<number>(0);
 
-  const clippingPlaneRef = useRef<ClippingPlane | null>(null);
-  const earthRadiusRef = useRef<number>(0);
   const tilesetRef = useRef<any>(null);
+  // Refs for Cesium callback properties (avoids stale closures / requestRenderMode issues)
+  const animatedFloodHeightRef = useRef<number>(10);
+  const waterOpacityRef = useRef<number>(0.7);
+  const baseHeightRef = useRef<number>(0);
 
   const [fps, setFps] = useState<number>(0);
 
@@ -154,17 +160,49 @@ const CityMap = () => {
     }
   }, [sse, fxaaEnabled]);
 
+  // Smooth animation for floodHeight
   useEffect(() => {
-    if (clippingPlaneRef.current) {
-      clippingPlaneRef.current.distance = -minHeight;
+    let animationFrame: number;
+    const startTime = performance.now();
+    const duration = 1000; // 1 second for smooth transition
+    const startHeight = animatedFloodHeight;
+    const targetHeight = floodHeight;
 
-      const viewer = viewerRef.current?.cesiumElement;
-      if (viewer && !viewer.isDestroyed()) {
-        viewer.scene.requestRender();
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing: easeInOutQuad
+      const easedProgress = progress < 0.5
+        ? 2 * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+      const currentHeight = startHeight + (targetHeight - startHeight) * easedProgress;
+      setAnimatedFloodHeight(currentHeight);
+      animatedFloodHeightRef.current = currentHeight; // Keep ref in sync
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
       }
-    }
-  }, [minHeight]);
+    };
 
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [floodHeight]);
+
+  // Request render on animated height change
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && !viewer.isDestroyed()) {
+      viewer.scene.requestRender();
+    }
+  }, [animatedFloodHeight]);
+
+  // Sync opacity ref so CallbackProperty always reads the latest value
+  useEffect(() => { waterOpacityRef.current = waterOpacity; }, [waterOpacity]);
+
+  // Fallback: if viewer was ready before baseHeight was sampled, entity may not have been created
+  const waterEntityRef = useRef<any>(null);
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
     if (viewer) {
@@ -223,39 +261,73 @@ const CityMap = () => {
         }).then(tileset => {
           if (!isMounted || viewer.isDestroyed()) return;
 
-          const polygonPositions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
+          const polygonPositionsForWater = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
 
-          // Only show 3D tiles strictly within the Portsmouth boundary polygon
+          // Re-apply boundary clipping to the tileset (strictly Portsmouth)
           tileset.clippingPolygons = new ClippingPolygonCollection({
             polygons: [
               new ClippingPolygon({
-                positions: polygonPositions
+                positions: polygonPositionsForWater
               })
             ],
             inverse: true // Clip OUTSIDE the polygon
           });
 
-          // Clip the base terrain globe INSIDE the polygon so it doesn't clip through 3D tiles
-          viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection({
-            polygons: [
-              new ClippingPolygon({
-                positions: polygonPositions
-              })
-            ]
+          // Globe clipping and vertical clipping planes remain disabled for the volume approach
+          viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection();
+          tileset.clippingPlanes = new ClippingPlaneCollection();
+          // Elevation/Volume based flooding approach
+          // Sample terrain height at the center of Portsmouth to offset the water volume correctly
+          const centerCartographic = Cartographic.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT);
+          sampleTerrainMostDetailed(terrain, [centerCartographic]).then(updated => {
+            const h = (updated && updated.length > 0 && updated[0].height !== undefined)
+              ? updated[0].height
+              : 47;
+            console.log('Portsmouth Base Height Sampled:', h);
+            // Update ref immediately; CallbackProperty reads this live
+            baseHeightRef.current = h;
+            setBaseHeight(h);
+
+            if (!viewer.isDestroyed()) {
+              // Diagnostic label
+              viewer.entities.add({
+                position: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, h + 80),
+                label: {
+                  text: `Base: ${h.toFixed(1)}m`,
+                  font: '14px sans-serif',
+                  fillColor: Color.AQUA,
+                  outlineColor: Color.BLACK,
+                  outlineWidth: 2,
+                  style: 2,
+                  verticalOrigin: VerticalOrigin.BOTTOM,
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY
+                }
+              });
+
+              // Flood water volume
+              if (!waterEntityRef.current) {
+                const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
+                waterEntityRef.current = viewer.entities.add({
+                  name: 'Flood Water',
+                  polygon: {
+                    hierarchy: new ConstantProperty(new PolygonHierarchy(positions)),
+                    height: new CallbackProperty(() => baseHeightRef.current, false),
+                    extrudedHeight: new CallbackProperty(
+                      () => baseHeightRef.current + animatedFloodHeightRef.current, false
+                    ),
+                    material: new ColorMaterialProperty(
+                      new CallbackProperty(
+                        () => Color.NAVY.withAlpha(Math.max(waterOpacityRef.current, 0.1)), false
+                      )
+                    ),
+                    outline: new ConstantProperty(false),
+                  }
+                });
+              }
+            }
           });
 
-          // Height clipping via ClippingPlane
-          const center = Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT);
-          earthRadiusRef.current = Cartesian3.magnitude(center);
-
-          const clippingPlane = new ClippingPlane(new Cartesian3(0.0, 0.0, 1.0), -minHeight);
-          clippingPlaneRef.current = clippingPlane;
-
-          tileset.clippingPlanes = new ClippingPlaneCollection({
-            modelMatrix: Transforms.eastNorthUpToFixedFrame(center),
-            planes: [clippingPlane],
-            edgeWidth: 0.0
-          });
+          // No clipping planes or primitives needed here.
 
           // Initial setup of SSE and FXAA
           tileset.maximumScreenSpaceError = sse;
@@ -286,22 +358,25 @@ const CityMap = () => {
         navigationHelpButton={false}
         sceneModePicker={false}
         baseLayerPicker={false}
-        requestRenderMode={true} // Optimize rendering
+        requestRenderMode={false}
       >
         <ContextMenuLogic setContextMenu={setContextMenu} billboards={billboards} billboardsRef={billboardsRef} />
 
         {/* Lines now drawn imperatively inside ContextMenuLogic */}
-
         <ImageryLayer imageryProvider={cartoDarkMatter} />
+
+        {/* All entities are managed imperatively via viewer.entities for requestRenderMode compatibility */}
       </Viewer>
+
+      <SimulationControls floodHeight={floodHeight} setFloodHeight={setFloodHeight} />
 
       <AdvancedControls
         fps={fps}
         optimizeVisuals={optimizeVisuals} setOptimizeVisuals={setOptimizeVisuals}
         resolutionScale={resolutionScale} setResolutionScale={setResolutionScale}
-        minHeight={minHeight} setMinHeight={setMinHeight}
         sse={sse} setSse={setSse}
         fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
+        waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
       />
 
       {/* --- Overlay UI --- */}

@@ -6,21 +6,21 @@ interface AdvancedControlsProps {
   setOptimizeVisuals: (v: boolean) => void;
   resolutionScale: number;
   setResolutionScale: (v: number) => void;
-  minHeight: number;
-  setMinHeight: (v: number) => void;
   sse: number;
   setSse: (v: number) => void;
   fxaaEnabled: boolean;
   setFxaaEnabled: (v: boolean) => void;
+  waterOpacity: number;
+  setWaterOpacity: (v: number) => void;
 }
 
 export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   fps,
   optimizeVisuals, setOptimizeVisuals,
   resolutionScale, setResolutionScale,
-  minHeight, setMinHeight,
   sse, setSse,
-  fxaaEnabled, setFxaaEnabled
+  fxaaEnabled, setFxaaEnabled,
+  waterOpacity, setWaterOpacity
 }) => {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
 
@@ -104,23 +104,6 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
             </div>
           </div>
 
-          {/* Height Control */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <label>Min Height</label>
-              <span style={{ color: '#00ffcc' }}>{minHeight}m</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="200"
-              step="1"
-              value={minHeight}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMinHeight(Number(e.target.value))}
-              style={{ width: '100%', accentColor: '#00ffcc' }}
-            />
-          </div>
-
           {/* SSE / Detail Level Control */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
@@ -149,6 +132,23 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
               checked={fxaaEnabled}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFxaaEnabled(e.target.checked)}
               style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00ffcc' }}
+            />
+          </div>
+
+          {/* Water Transparency Control */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+              <label>Water Transparency</label>
+              <span style={{ color: '#00ffcc' }}>{(waterOpacity * 100).toFixed(0)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0.1"
+              max="1.0"
+              step="0.05"
+              value={waterOpacity}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWaterOpacity(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#00ffcc' }}
             />
           </div>
         </div>
