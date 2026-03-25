@@ -16,6 +16,7 @@ import { MissileMenu } from './stories/MissileMenu';
 import { MissileMapController } from './stories/MissileMapController';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
+import CityTitleOverlay from './CityTitleOverlay';
 
 export interface BillboardData {
   id: string;
@@ -613,6 +614,8 @@ const CityMap = () => {
 
         {/* All entities are managed imperatively via viewer.entities for requestRenderMode compatibility */}
       </Viewer>
+
+      <CityTitleOverlay />
 
       {activeStory === 'sea-level-rise' && (
         <>
