@@ -8,6 +8,10 @@ import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsyn
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
 import { BaseMapControls } from './BaseMapControls';
+import { useAppSelector } from '../store';
+import { getInterpolatedSeaLevel } from '../lib/seaLevelData';
+import { StoriesMenu } from './StoriesMenu';
+import { SeaLevelChart } from './SeaLevelChart';
 
 export interface BillboardData {
   id: string;
@@ -61,6 +65,21 @@ const CityMap = () => {
   const [billboards, setBillboards] = useState<BillboardData[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const billboardsRef = useRef<Map<string, HTMLDivElement | null>>(new Map());
+
+  // -- Redux Story State --
+  const activeStory = useAppSelector(state => state.story.activeStory);
+  const selectedYear = useAppSelector(state => state.story.selectedYear);
+
+  useEffect(() => {
+    if (activeStory === 'sea-level-rise') {
+      const currentLevel = getInterpolatedSeaLevel(selectedYear);
+      // Data historically starts around 6.952m at Portsmouth. 
+      // Calculate realistic meters of rise above the base year.
+      const riseMeters = Math.max(0, currentLevel - 6.952);
+      // If we need visual exaggeration, we can multiply the delta. But let's stick to true scale first.
+      setFloodHeight(parseFloat(riseMeters.toFixed(2)));
+    }
+  }, [selectedYear, activeStory]);
 
   const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
     try {
@@ -593,7 +612,12 @@ const CityMap = () => {
         {/* All entities are managed imperatively via viewer.entities for requestRenderMode compatibility */}
       </Viewer>
 
-      <SimulationControls floodHeight={floodHeight} setFloodHeight={setFloodHeight} />
+      {activeStory === 'sea-level-rise' && (
+        <>
+          <SeaLevelChart />
+          <SimulationControls floodHeight={floodHeight} setFloodHeight={setFloodHeight} />
+        </>
+      )}
 
       <BaseMapControls viewerRef={viewerRef} />
 
@@ -624,6 +648,8 @@ const CityMap = () => {
           if (viewer && !viewer.isDestroyed()) viewer.scene.requestRender();
         }}
       />
+
+      <StoriesMenu />
     </div>
   );
 };

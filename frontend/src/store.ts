@@ -1,28 +1,16 @@
 import { configureStore } from '@reduxjs/toolkit';
-
-interface TimelineState {
-  currentYear: number;
-}
-interface TimelineAction {
-  type: string;
-  payload?: number;
-}
-
-// Placeholder for a timeline slice
-const timelineReducer = (state: TimelineState = { currentYear: 2024 }, action: TimelineAction) => {
-  switch (action.type) {
-    case 'SET_YEAR':
-      return { ...state, currentYear: action.payload as number };
-    default:
-      return state;
-  }
-};
+import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
+import storyReducer from './store/storySlice';
 
 export const store = configureStore({
   reducer: {
-    timeline: timelineReducer,
+    story: storyReducer,
   },
 });
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+// Use throughout your app instead of plain `useDispatch` and `useSelector`
+export const useAppDispatch: () => AppDispatch = useDispatch;
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;

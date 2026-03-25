@@ -7,9 +7,6 @@ function App() {
       <Box sx={{ flex: 1, position: 'relative' }}>
         <CityMap />
       </Box>
-      <Box sx={{ p: 2, height: '100px', backgroundColor: 'background.paper', borderTop: 1, borderColor: 'divider', zIndex: 10, position: 'relative' }}>
-        <Typography variant="h6" color="primary">Timeline Interface</Typography>
-      </Box>
     </Box>
   );
 }
