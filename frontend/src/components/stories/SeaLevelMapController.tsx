@@ -69,6 +69,7 @@ interface Props {
 export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, waterOpacity }) => {
   const activeStory = useAppSelector(state => state.story.activeStory);
   const selectedYear = useAppSelector(state => state.story.selectedYear);
+  const manualSeaLevelRise = useAppSelector(state => state.story.manualSeaLevelRise);
 
   const [floodHeight, setFloodHeight] = useState<number>(0);
   const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(0);
@@ -86,14 +87,18 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
   }, [waterOpacity]);
   useEffect(() => { baseHeightRef.current = baseHeight; }, [baseHeight]);
 
-  // Calculate target flood height based on selected year
+  // Calculate target flood height — manual override takes priority over year-based
   useEffect(() => {
     if (activeStory === 'sea-level-rise') {
-      const currentLevel = getInterpolatedSeaLevel(selectedYear);
-      const riseMeters = Math.max(0, currentLevel - 6.952 + 1.1);
-      setFloodHeight(parseFloat(riseMeters.toFixed(2)));
+      if (manualSeaLevelRise !== null) {
+        setFloodHeight(parseFloat(manualSeaLevelRise.toFixed(2)));
+      } else {
+        const currentLevel = getInterpolatedSeaLevel(selectedYear);
+        const riseMeters = Math.max(0, currentLevel - 6.952 + 1.1);
+        setFloodHeight(parseFloat(riseMeters.toFixed(2)));
+      }
     }
-  }, [selectedYear, activeStory]);
+  }, [selectedYear, activeStory, manualSeaLevelRise]);
 
   // Smooth animation for floodHeight
   useEffect(() => {

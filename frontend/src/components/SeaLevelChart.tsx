@@ -1,13 +1,15 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
-import { setSelectedYear } from '../store/storySlice';
+import { setSelectedYear, setManualSeaLevelRise } from '../store/storySlice';
 import { parseSeaLevelData } from '../lib/seaLevelData';
 
 export const SeaLevelChart: React.FC = () => {
   const dispatch = useAppDispatch();
   const selectedYear = useAppSelector((state) => state.story.selectedYear);
+  const manualSeaLevelRise = useAppSelector((state) => state.story.manualSeaLevelRise);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
 
   // Parse data and calculate layout scales
   const data = useMemo(() => parseSeaLevelData(), []);
@@ -198,6 +200,56 @@ export const SeaLevelChart: React.FC = () => {
           <div style={{ width: '12px', height: '2px', borderTop: '2px dashed #ccff00' }}></div>
           <span style={{ fontSize: '10px', color: '#888' }}>RCP 8.5 Projection</span>
         </div>
+      </div>
+
+      {/* Manual Override */}
+      <div style={{ marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '10px' }}>
+        <button
+          onClick={() => {
+            const next = !overrideOpen;
+            setOverrideOpen(next);
+            if (!next) dispatch(setManualSeaLevelRise(null));
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+            padding: 0, color: manualSeaLevelRise !== null ? '#00ffcc' : '#888',
+          }}
+        >
+          <span style={{ fontSize: '11px', letterSpacing: '0.5px', fontFamily: 'inherit' }}>
+            MANUAL OVERRIDE{manualSeaLevelRise !== null ? ` — ${manualSeaLevelRise.toFixed(2)}m rise` : ''}
+          </span>
+          <span style={{ fontSize: '10px' }}>{overrideOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {overrideOpen && (
+          <div style={{ marginTop: '10px' }}>
+            <input
+              type="range"
+              min={0} max={10} step={0.01}
+              value={manualSeaLevelRise ?? 0}
+              onChange={(e) => dispatch(setManualSeaLevelRise(parseFloat(e.target.value)))}
+              style={{ width: '100%', accentColor: '#00ffcc', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+              <span style={{ fontSize: '10px', color: '#555' }}>0 m</span>
+              <span style={{ fontSize: '10px', color: '#555' }}>10 m</span>
+            </div>
+            {manualSeaLevelRise !== null && (
+              <button
+                onClick={() => dispatch(setManualSeaLevelRise(null))}
+                style={{
+                  marginTop: '8px', width: '100%', background: 'none',
+                  border: '1px solid rgba(255,255,255,0.1)', color: '#888',
+                  fontSize: '10px', padding: '4px', cursor: 'pointer',
+                  fontFamily: 'inherit', letterSpacing: '0.5px',
+                }}
+              >
+                CLEAR — RETURN TO YEAR PROJECTION
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Data Source Footnote */}
