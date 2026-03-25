@@ -24,6 +24,12 @@ interface AdvancedControlsProps {
   setFxaaEnabled: (v: boolean) => void;
   waterOpacity: number;
   setWaterOpacity: (v: number) => void;
+  tileCacheSize: number;
+  setTileCacheSize: (v: number) => void;
+  preloadSiblings: boolean;
+  setPreloadSiblings: (v: boolean) => void;
+  foveatedRendering: boolean;
+  setFoveatedRendering: (v: boolean) => void;
   viewerRef: React.MutableRefObject<any>;
 }
 
@@ -35,6 +41,9 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   autoSse, setAutoSse,
   fxaaEnabled, setFxaaEnabled,
   waterOpacity, setWaterOpacity,
+  tileCacheSize, setTileCacheSize,
+  preloadSiblings, setPreloadSiblings,
+  foveatedRendering, setFoveatedRendering,
   viewerRef
 }) => {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
@@ -266,6 +275,52 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWaterOpacity(Number(e.target.value))}
               style={{ width: '100%', accentColor: '#00ffcc' }}
             />
+          </div>
+
+          {/* Tile Streaming */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#aaa', letterSpacing: '0.4px' }}>
+              TILE STREAMING
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <label>Tile Cache Size</label>
+                <span style={{ color: '#00ffcc' }}>{tileCacheSize}</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="1000"
+                step="50"
+                value={tileCacheSize}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTileCacheSize(Number(e.target.value))}
+                style={{ width: '100%', accentColor: '#00ffcc' }}
+              />
+              <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
+                Higher = fewer re-downloads when revisiting areas
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <label>Preload Neighbour Tiles</label>
+              <input
+                type="checkbox"
+                checked={preloadSiblings}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPreloadSiblings(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00ffcc' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <label>Foveated Rendering</label>
+              <input
+                type="checkbox"
+                checked={foveatedRendering}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFoveatedRendering(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#00ffcc' }}
+              />
+            </div>
+            <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
+              Foveated: full quality at screen centre, reduced at edges
+            </div>
           </div>
         </div>
       )}

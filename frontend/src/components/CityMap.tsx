@@ -57,6 +57,9 @@ const CityMap = () => {
   const [resolutionScale, setResolutionScale] = useState<number>(0.9);
   const [optimizeVisuals, setOptimizeVisuals] = useState<boolean>(false);
   const [waterOpacity, setWaterOpacity] = useState<number>(0.8);
+  const [tileCacheSize, setTileCacheSize] = useState<number>(400);
+  const [preloadSiblings, setPreloadSiblings] = useState<boolean>(true);
+  const [foveatedRendering, setFoveatedRendering] = useState<boolean>(false);
   const [baseHeight, setBaseHeight] = useState<number>(0);
 
   const tilesetRef = useRef<any>(null);
@@ -388,6 +391,22 @@ const CityMap = () => {
   // Sync opacity ref so CallbackProperty always reads the latest value
   useEffect(() => { waterOpacityRef.current = waterOpacity; }, [waterOpacity]);
 
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.scene.globe.tileCacheSize = tileCacheSize;
+    viewer.scene.globe.preloadSiblings = preloadSiblings;
+    viewer.scene.requestRender();
+  }, [tileCacheSize, preloadSiblings]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.scene.globe.foveatedScreenSpaceError = foveatedRendering;
+    if (tilesetRef.current) tilesetRef.current.foveatedScreenSpaceError = foveatedRendering;
+    viewer.scene.requestRender();
+  }, [foveatedRendering]);
+
   // Fallback: if viewer was ready before baseHeight was sampled, entity may not have been created
   const waterEntityRef = useRef<any>(null);
   useEffect(() => {
@@ -443,6 +462,10 @@ const CityMap = () => {
         // Default dark base colour — ensures no z-fighting or blue seams while imagery loads.
         // BaseMapControls manages all imagery layers imperatively.
         viewer.scene.globe.baseColor = Color.fromCssColorString('#101217');
+
+        // Tile streaming defaults — larger cache + preload neighbours for smooth flyovers
+        viewer.scene.globe.tileCacheSize = 400;
+        viewer.scene.globe.preloadSiblings = true;
 
         const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -674,6 +697,9 @@ const CityMap = () => {
           autoSse={autoSse} setAutoSse={(v) => { setAutoSse(v); autoSseRef.current = v; }}
           fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
           waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
+          tileCacheSize={tileCacheSize} setTileCacheSize={setTileCacheSize}
+          preloadSiblings={preloadSiblings} setPreloadSiblings={setPreloadSiblings}
+          foveatedRendering={foveatedRendering} setFoveatedRendering={setFoveatedRendering}
           viewerRef={viewerRef}
         />
         {activeStory === 'drone-flying' && <DroneSettings />}
