@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import storyReducer from './store/storySlice';
+import seaLevelReducer from './store/seaLevelSlice';
 import missileStrikeReducer from './store/missileStrikeSlice';
 import uiReducer from './store/uiSlice';
 import droneReducer from './store/droneSlice';
@@ -8,6 +9,7 @@ import droneReducer from './store/droneSlice';
 export const store = configureStore({
   reducer: {
     story: storyReducer,
+    seaLevel: seaLevelReducer,
     missileStrike: missileStrikeReducer,
     ui: uiReducer,
     drone: droneReducer,

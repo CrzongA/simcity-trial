@@ -68,8 +68,8 @@ interface Props {
 
 export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, waterOpacity }) => {
   const activeStory = useAppSelector(state => state.story.activeStory);
-  const selectedYear = useAppSelector(state => state.story.selectedYear);
-  const manualSeaLevelRise = useAppSelector(state => state.story.manualSeaLevelRise);
+  const selectedYear = useAppSelector(state => state.seaLevel.selectedYear);
+  const manualSeaLevelRise = useAppSelector(state => state.seaLevel.manualSeaLevelRise);
 
   const [floodHeight, setFloodHeight] = useState<number>(0);
   const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(0);

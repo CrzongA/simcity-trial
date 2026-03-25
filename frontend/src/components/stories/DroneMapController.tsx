@@ -8,6 +8,7 @@ import {
 } from 'cesium';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { setFlightMode, setSpeedTier, AxisCalibration } from '../../store/droneSlice';
+import { setBaseLayer } from '../../store/uiSlice';
 
 interface DroneMapControllerProps {
   viewerRef: React.MutableRefObject<any>;
@@ -99,6 +100,19 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
   const dispatch    = useAppDispatch();
   const activeStory = useAppSelector(state => state.story.activeStory);
   const drone       = useAppSelector(state => state.drone);
+  const baseLayer   = useAppSelector(state => state.ui.baseLayer);
+
+  const prevBaseLayerRef = useRef(baseLayer);
+
+  // Switch to satellite on story activate; restore previous layer on exit
+  useEffect(() => {
+    if (activeStory !== 'drone-flying') return;
+    prevBaseLayerRef.current = baseLayer;
+    dispatch(setBaseLayer('satellite'));
+    return () => { dispatch(setBaseLayer(prevBaseLayerRef.current)); };
+  // baseLayer intentionally omitted — capture only at entry, not on every user change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStory, dispatch]);
 
   // Stale-closure-safe refs for all Redux state used inside preRender
   const activeStoryRef   = useRef(activeStory);

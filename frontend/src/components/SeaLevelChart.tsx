@@ -1,12 +1,12 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
-import { setSelectedYear, setManualSeaLevelRise } from '../store/storySlice';
+import { setSelectedYear, setManualSeaLevelRise } from '../store/seaLevelSlice';
 import { parseSeaLevelData } from '../lib/seaLevelData';
 
 export const SeaLevelChart: React.FC = () => {
   const dispatch = useAppDispatch();
-  const selectedYear = useAppSelector((state) => state.story.selectedYear);
-  const manualSeaLevelRise = useAppSelector((state) => state.story.manualSeaLevelRise);
+  const selectedYear = useAppSelector((state) => state.seaLevel.selectedYear);
+  const manualSeaLevelRise = useAppSelector((state) => state.seaLevel.manualSeaLevelRise);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);

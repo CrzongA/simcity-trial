@@ -85,7 +85,6 @@ const CityMap = () => {
 
   // -- Redux Story State --
   const activeStory = useAppSelector(state => state.story.activeStory);
-  const selectedYear = useAppSelector(state => state.story.selectedYear);
 
   // Sync activeStory to Ref for Cesium CallbackProperty usage
   useEffect(() => {
