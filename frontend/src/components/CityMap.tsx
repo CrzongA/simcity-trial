@@ -8,10 +8,14 @@ import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsyn
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
 import { BaseMapControls } from './BaseMapControls';
-import { useAppSelector } from '../store';
+import { useAppSelector, useAppDispatch } from '../store';
 import { getInterpolatedSeaLevel } from '../lib/seaLevelData';
 import { StoriesMenu } from './StoriesMenu';
 import { SeaLevelChart } from './SeaLevelChart';
+import { MissileMenu } from './stories/MissileMenu';
+import { MissileMapController } from './stories/MissileMapController';
+import { setTilesLoaded } from '../store/uiSlice';
+import BannerOverlay from './BannerOverlay';
 
 export interface BillboardData {
   id: string;
@@ -39,6 +43,7 @@ const HEIGHT = 1500; // meters
 // z-fighting / clipping through the photorealistic tiles.
 
 const CityMap = () => {
+  const dispatch = useAppDispatch();
   const viewerRef = useRef<any>(null);
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
   const [floodHeight, setFloodHeight] = useState<number>(0);
@@ -557,16 +562,44 @@ const CityMap = () => {
           tileset.maximumScreenSpaceError = sse;
           tilesetRef.current = tileset;
 
+          // --- Loading Detection for Splash Screen ---
+          let loadingHandled = false;
+          const finishLoading = (reason: string) => {
+            if (loadingHandled) return;
+            loadingHandled = true;
+            console.log(`Tileset loading finished. Reason: ${reason}`);
+            dispatch(setTilesLoaded(true));
+            clearInterval(checkInterval);
+            clearTimeout(tilesetTimeout);
+            tileset.initialTilesLoaded.removeEventListener(finishLoading);
+          };
+          const checkInterval = setInterval(() => {
+            if (tileset.allTilesLoaded || (tileset as any).ready) finishLoading('Property Check');
+          }, 500);
+          const tilesetTimeout = setTimeout(() => finishLoading('Timeout Fallback'), 10000);
+          tileset.initialTilesLoaded.addEventListener(finishLoading);
+          // --- End Loading Detection ---
+
           if (viewer.scene.postProcessStages && viewer.scene.postProcessStages.fxaa) {
             viewer.scene.postProcessStages.fxaa.enabled = fxaaEnabled;
           }
 
           viewer.scene.primitives.add(tileset);
-        }).catch(err => console.warn("Could not load Google Photorealistic Tiles:", err));
+        }).catch(err => {
+          console.warn("Could not load Google Photorealistic Tiles:", err);
+          dispatch(setTilesLoaded(true));
+        });
       }
-    }).catch(err => console.warn("Could not load terrain:", err));
+    }).catch(err => {
+      console.warn("Could not load terrain:", err);
+      dispatch(setTilesLoaded(true));
+    });
 
-    return () => { isMounted = false; };
+    const globalTimeout = setTimeout(() => {
+      if (isMounted) dispatch(setTilesLoaded(true));
+    }, 15000);
+
+    return () => { isMounted = false; clearTimeout(globalTimeout); };
   }, []);
 
   return (
@@ -604,6 +637,13 @@ const CityMap = () => {
         </>
       )}
 
+      {activeStory === 'missile-strike' && (
+        <>
+          <MissileMenu />
+          <MissileMapController viewerRef={viewerRef} />
+        </>
+      )}
+
       <BaseMapControls viewerRef={viewerRef} />
 
       <AdvancedControls
@@ -635,6 +675,7 @@ const CityMap = () => {
       />
 
       <StoriesMenu />
+      <BannerOverlay />
     </div>
   );
 };

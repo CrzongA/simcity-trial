@@ -105,6 +105,7 @@ export const SeaLevelChart: React.FC = () => {
         fontFamily: '"Inter", "system-ui", sans-serif',
         display: 'flex',
         flexDirection: 'column',
+        userSelect: 'none',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>

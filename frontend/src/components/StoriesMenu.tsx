@@ -3,7 +3,8 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setActiveStory } from '../store/storySlice';
 
 const STORIES = [
-  { id: 'sea-level-rise', label: 'Sea Level Rise', emoji: '🌊' }
+  { id: 'sea-level-rise', label: 'Sea Level Rise', emoji: '🌊' },
+  { id: 'missile-strike', label: 'Missile Strike', emoji: '🚀' }
 ];
 
 export const StoriesMenu: React.FC = () => {

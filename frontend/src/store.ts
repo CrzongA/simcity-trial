@@ -1,10 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import storyReducer from './store/storySlice';
+import missileStrikeReducer from './store/missileStrikeSlice';
+import uiReducer from './store/uiSlice';
 
 export const store = configureStore({
   reducer: {
     story: storyReducer,
+    missileStrike: missileStrikeReducer,
+    ui: uiReducer,
   },
 });
 

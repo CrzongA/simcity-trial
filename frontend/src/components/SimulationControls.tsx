@@ -62,7 +62,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             <input
               type="range"
               min="0"
-              max="200"
+              max="100"
               step="1"
               value={floodHeight}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFloodHeight(Number(e.target.value))}
