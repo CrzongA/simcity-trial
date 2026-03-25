@@ -2,10 +2,63 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAppSelector } from '../../store';
 import {
   Cartesian3, Color, CallbackProperty, Entity,
-  ColorMaterialProperty, ConstantProperty, PolygonHierarchy
+  ConstantProperty, PolygonHierarchy,
+  Material, JulianDate, Event as CesiumEvent, buildModuleUrl
 } from 'cesium';
 import { getInterpolatedSeaLevel } from '../../lib/seaLevelData';
 import { PORTSEA_POLYGON_COORDS } from '../../lib/consts';
+
+// Cache static values outside the class — these never change
+const WATER_NORMAL_MAP = buildModuleUrl('Assets/Textures/waterNormals.jpg');
+const WATER_BLEND_COLOR = new Color(0.3, 0.6, 0.9, 0.3);
+
+class WaterMaterialProperty {
+  private _definitionChanged: CesiumEvent;
+  private _opacityRef: React.MutableRefObject<number>;
+  private _lastAlpha: number = -1;
+  private _cachedColor: Color;
+
+  constructor(opacityRef: React.MutableRefObject<number>) {
+    this._definitionChanged = new CesiumEvent();
+    this._opacityRef = opacityRef;
+    this._cachedColor = new Color(0.1, 0.3, 0.65, Math.max(opacityRef.current, 0.1));
+  }
+
+  // isConstant=true: GPU shader handles animation; JS doesn't need per-frame updates
+  get isConstant() { return true; }
+  get definitionChanged() { return this._definitionChanged; }
+
+  getType(_time: JulianDate): string {
+    return Material.WaterType;
+  }
+
+  getValue(_time: JulianDate, result?: any): any {
+    if (!result) result = {};
+    const alpha = Math.max(this._opacityRef.current, 0.1);
+    // Only update color object when opacity actually changed
+    if (alpha !== this._lastAlpha) {
+      this._lastAlpha = alpha;
+      this._cachedColor = new Color(0.1, 0.3, 0.65, alpha);
+    }
+    result.baseWaterColor = this._cachedColor;
+    result.blendColor = WATER_BLEND_COLOR;
+    result.normalMap = WATER_NORMAL_MAP;
+    result.frequency = 800.0;
+    result.animationSpeed = 0.03;
+    result.amplitude = 8.0;
+    result.specularIntensity = 0.8;
+    return result;
+  }
+
+  /** Call this when opacity changes so Cesium re-evaluates the material */
+  notifyChange(): void {
+    this._definitionChanged.raiseEvent(this);
+  }
+
+  equals(other: any): boolean {
+    return this === other;
+  }
+}
 
 interface Props {
   viewerRef: React.MutableRefObject<any>;
@@ -24,9 +77,13 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
   const waterOpacityRef = useRef<number>(waterOpacity);
   const baseHeightRef = useRef<number>(baseHeight);
   const waterEntityRef = useRef<Entity | null>(null);
+  const waterMaterialRef = useRef<WaterMaterialProperty | null>(null);
 
   // Sync refs for Cesium Callbacks
-  useEffect(() => { waterOpacityRef.current = waterOpacity; }, [waterOpacity]);
+  useEffect(() => {
+    waterOpacityRef.current = waterOpacity;
+    waterMaterialRef.current?.notifyChange();
+  }, [waterOpacity]);
   useEffect(() => { baseHeightRef.current = baseHeight; }, [baseHeight]);
 
   // Calculate target flood height based on selected year
@@ -82,6 +139,7 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
     if (activeStory === 'sea-level-rise') {
       if (!waterEntityRef.current) {
         const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
+        waterMaterialRef.current = new WaterMaterialProperty(waterOpacityRef);
         waterEntityRef.current = viewer.entities.add({
           name: 'Flood Water (Story)',
           polygon: {
@@ -90,11 +148,7 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
             extrudedHeight: new CallbackProperty(
               () => baseHeightRef.current + animatedFloodHeightRef.current, false
             ),
-            material: new ColorMaterialProperty(
-              new CallbackProperty(
-                () => Color.NAVY.withAlpha(Math.max(waterOpacityRef.current, 0.1)), false
-              )
-            ),
+            material: new WaterMaterialProperty(waterOpacityRef),
             outline: new ConstantProperty(false),
           }
         });
@@ -103,6 +157,7 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
       if (waterEntityRef.current) {
         viewer.entities.remove(waterEntityRef.current);
         waterEntityRef.current = null;
+        waterMaterialRef.current = null;
       }
     }
 
@@ -113,6 +168,7 @@ export const SeaLevelMapController: React.FC<Props> = ({ viewerRef, baseHeight, 
       if (waterEntityRef.current && viewer && !viewer.isDestroyed()) {
         viewer.entities.remove(waterEntityRef.current);
         waterEntityRef.current = null;
+        waterMaterialRef.current = null;
         viewer.scene.requestRender();
       }
     };

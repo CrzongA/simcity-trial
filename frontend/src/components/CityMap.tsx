@@ -14,6 +14,9 @@ import { SeaLevelChart } from './SeaLevelChart';
 import { SeaLevelMapController } from './stories/SeaLevelMapController';
 import { MissileMenu } from './stories/MissileMenu';
 import { MissileMapController } from './stories/MissileMapController';
+import { DroneMapController } from './stories/DroneMapController';
+import { DroneHUD } from './stories/DroneHUD';
+import { DroneSettings } from './stories/DroneSettings';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
 import CityTitleOverlay from './CityTitleOverlay';
@@ -61,6 +64,13 @@ const CityMap = () => {
   const waterOpacityRef = useRef<number>(0.7);
   const baseHeightRef = useRef<number>(0);
   const activeStoryRef = useRef<string | null>(null);
+
+  // Drone HUD DOM refs (updated imperatively by DroneMapController each frame)
+  const droneAltRef = useRef<HTMLSpanElement | null>(null);
+  const droneSpdRef = useRef<HTMLSpanElement | null>(null);
+  const droneHdgRef = useRef<HTMLSpanElement | null>(null);
+  const droneHorizonRef = useRef<SVGLineElement | null>(null);
+  const droneCtrlRef = useRef<HTMLSpanElement | null>(null);
 
   const [fps, setFps] = useState<number>(0);
 
@@ -426,15 +436,6 @@ const CityMap = () => {
             roll: CesiumMath.toRadians(0),
           }
         });
-        // viewer.camera.flyTo({
-        //   destination: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, HEIGHT),
-        //   orientation: {
-        //     heading: CesiumMath.toRadians(80.0),
-        //     pitch: CesiumMath.toRadians(-45.0),
-        //     roll: 0.0
-        //   },
-        //   duration: 0
-        // });
 
         viewer.terrainProvider = terrain;
         viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -491,7 +492,7 @@ const CityMap = () => {
               // Shadow Stack: Multi-layered semi-transparent polylines to create a non-additive 
               // darkening gradient (feathering) between the city tiles and the dark map.
               const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
-              
+
               const shadowSteps = [
                 { width: 120, alpha: 0.08 },
                 { width: 90, alpha: 0.12 },
@@ -633,18 +634,50 @@ const CityMap = () => {
         </>
       )}
 
+      {activeStory === 'drone-flying' && (
+        <>
+          <DroneHUD
+            altRef={droneAltRef}
+            spdRef={droneSpdRef}
+            hdgRef={droneHdgRef}
+            horizonRef={droneHorizonRef}
+            ctrlRef={droneCtrlRef}
+          />
+          <DroneMapController
+            viewerRef={viewerRef}
+            altRef={droneAltRef}
+            spdRef={droneSpdRef}
+            hdgRef={droneHdgRef}
+            horizonRef={droneHorizonRef}
+            ctrlRef={droneCtrlRef}
+          />
+        </>
+      )}
+
       <BaseMapControls viewerRef={viewerRef} />
 
-      <AdvancedControls
-        fps={fps}
-        optimizeVisuals={optimizeVisuals} setOptimizeVisuals={setOptimizeVisuals}
-        resolutionScale={resolutionScale} setResolutionScale={setResolutionScale}
-        sse={sse} setSse={setSse}
-        autoSse={autoSse} setAutoSse={(v) => { setAutoSse(v); autoSseRef.current = v; }}
-        fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
-        waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
-        viewerRef={viewerRef}
-      />
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        right: 20,
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        width: '260px',
+      }}>
+        <AdvancedControls
+          fps={fps}
+          optimizeVisuals={optimizeVisuals} setOptimizeVisuals={setOptimizeVisuals}
+          resolutionScale={resolutionScale} setResolutionScale={setResolutionScale}
+          sse={sse} setSse={setSse}
+          autoSse={autoSse} setAutoSse={(v) => { setAutoSse(v); autoSseRef.current = v; }}
+          fxaaEnabled={fxaaEnabled} setFxaaEnabled={setFxaaEnabled}
+          waterOpacity={waterOpacity} setWaterOpacity={setWaterOpacity}
+          viewerRef={viewerRef}
+        />
+        {activeStory === 'drone-flying' && <DroneSettings />}
+      </div>
 
       {/* --- Overlay UI --- */}
       {/* Context Menu */}

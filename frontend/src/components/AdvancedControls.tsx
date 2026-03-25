@@ -81,10 +81,6 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
 
   return (
     <div style={{
-      position: 'absolute',
-      top: 20,
-      right: 20,
-      zIndex: 10,
       background: 'rgba(25, 25, 25, 0.9)',
       color: '#fff',
       padding: '12px',
@@ -94,7 +90,6 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
       display: 'flex',
       flexDirection: 'column',
       gap: '12px',
-      width: '260px',
       fontFamily: '"Inter", "system-ui", sans-serif',
       border: '1px solid rgba(255,255,255,0.1)'
     }}>
