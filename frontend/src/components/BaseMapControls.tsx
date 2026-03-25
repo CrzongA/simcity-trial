@@ -1,9 +1,9 @@
-import { useRef, useState, useEffect } from 'react';
-import { UrlTemplateImageryProvider, Color } from 'cesium';
+import { useAppSelector, useAppDispatch } from '../store';
+import { setBaseLayer } from '../store/uiSlice';
 
-type BaseMapId = 'dark' | 'light' | 'satellite' | 'osm' | 'carto-dark';
+export type BaseMapId = 'dark' | 'light' | 'satellite' | 'osm' | 'carto-dark';
 
-interface BaseMapOption {
+export interface BaseMapOption {
   id: BaseMapId;
   label: string;
   emoji: string;
@@ -15,7 +15,7 @@ interface BaseMapOption {
   credit?: string;
 }
 
-const BASE_MAPS: BaseMapOption[] = [
+export const BASE_MAPS: BaseMapOption[] = [
   {
     id: 'satellite',
     label: 'Satellite',
@@ -35,6 +35,7 @@ const BASE_MAPS: BaseMapOption[] = [
     id: 'carto-dark',
     label: 'Dark Streets',
     emoji: '🌆',
+    // CartoDB Dark Matter — uses standard WebMercator schema
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
     subdomains: ['a', 'b', 'c', 'd'],
     credit: 'Map tiles by CartoDB, under CC BY 3.0. Data by OpenStreetMap, under ODbL.',
@@ -42,50 +43,15 @@ const BASE_MAPS: BaseMapOption[] = [
 ];
 
 interface BaseMapControlsProps {
-  viewerRef: React.MutableRefObject<any>;
+  viewerRef?: React.MutableRefObject<any>; // Optional now
 }
 
-export const BaseMapControls: React.FC<BaseMapControlsProps> = ({ viewerRef }) => {
-  const [selected, setSelected] = useState<BaseMapId>('carto-dark');
-  const currentLayerRef = useRef<any>(null);
-
-  // Apply the selected map on mount once the viewer is available
-  useEffect(() => {
-    const viewer = viewerRef.current?.cesiumElement;
-    if (viewer && !currentLayerRef.current) {
-      const initialMap = BASE_MAPS.find(m => m.id === selected);
-      if (initialMap) handleSelect(initialMap);
-    }
-  }, [viewerRef.current?.cesiumElement]);
+export const BaseMapControls: React.FC<BaseMapControlsProps> = () => {
+  const dispatch = useAppDispatch();
+  const selected = useAppSelector(state => state.ui.baseLayer) as BaseMapId;
 
   const handleSelect = (option: BaseMapOption) => {
-    const viewer = viewerRef.current?.cesiumElement;
-    if (!viewer || viewer.isDestroyed()) return;
-
-    setSelected(option.id);
-
-    // Remove previous imagery layer
-    if (currentLayerRef.current) {
-      viewer.imageryLayers.remove(currentLayerRef.current, true);
-      currentLayerRef.current = null;
-    }
-
-    if (option.baseColor) {
-      // Solid-color mode — no imagery, no z-fighting
-      viewer.scene.globe.baseColor = Color.fromCssColorString(option.baseColor);
-    } else if (option.url) {
-      // Imagery mode — reset base color to dark so seams aren't jarring
-      viewer.scene.globe.baseColor = Color.fromCssColorString('#101217');
-      const provider = new UrlTemplateImageryProvider({
-        url: option.url,
-        credit: option.credit || '',
-        subdomains: option.subdomains,
-      });
-      const layer = viewer.imageryLayers.addImageryProvider(provider, 0);
-      currentLayerRef.current = layer;
-    }
-
-    viewer.scene.requestRender();
+    dispatch(setBaseLayer(option.id));
   };
 
   return (

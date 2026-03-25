@@ -21,6 +21,7 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
   const selectedWeaponId = useAppSelector(state => state.missileStrike.selectedWeaponId);
   const isPlacing = useAppSelector(state => state.missileStrike.isPlacing);
   const pinnedStrikes = useAppSelector(state => state.missileStrike.pinnedStrikes);
+  const activeStory = useAppSelector(state => state.story.activeStory);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
@@ -31,7 +32,13 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
 
   // Sync pinnedStrikes for CallbackProperty usage
   const pinnedStrikesRef = useRef(pinnedStrikes);
+  const activeStoryRef = useRef(activeStory);
   useEffect(() => { pinnedStrikesRef.current = pinnedStrikes; }, [pinnedStrikes]);
+  useEffect(() => { 
+    activeStoryRef.current = activeStory; 
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && !viewer.isDestroyed()) viewer.scene.requestRender();
+  }, [activeStory]);
 
   const pinnedEntitiesRef = useRef<{ strikeId: string; entities: Entity[] }[]>([]);
 
@@ -127,15 +134,22 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
     const viewer = viewerRef.current?.cesiumElement;
     if (!viewer) return;
 
-    // Clean up old entities
+    // Clean up old entities or ALL entities if story is not active
     const currentIds = new Set(pinnedStrikes.map(s => s.id));
+    const isActive = activeStory === 'missile-strike';
+    
     pinnedEntitiesRef.current = pinnedEntitiesRef.current.filter(pe => {
-      if (!currentIds.has(pe.strikeId)) {
+      if (!isActive || !currentIds.has(pe.strikeId)) {
         pe.entities.forEach(e => viewer.entities.remove(e));
         return false;
       }
       return true;
     });
+
+    if (!isActive) {
+      viewer.scene.requestRender();
+      return;
+    }
 
     // Add new entities (Domes + Connecting Polyline)
     pinnedStrikes.forEach(strike => {
@@ -146,21 +160,22 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
         const groundPos = Cartesian3.fromDegrees(strike.lng, strike.lat, strike.height);
         const newEntities: Entity[] = [];
 
-        // Blast Domes
-        weapon.tiers.forEach(tier => {
-          newEntities.push(viewer.entities.add({
-            position: groundPos,
-            ellipsoid: {
-              radii: new Cartesian3(tier.radius, tier.radius, tier.radius),
-              material: Color.fromCssColorString(tier.color),
-              outline: false,
-              maximumCone: CesiumMath.PI_OVER_TWO
-            }
-          }));
-        });
+          weapon.tiers.forEach((tier, i) => {
+            newEntities.push(viewer.entities.add({
+              name: `Missile Dome ${strike.id} Tier ${i}`,
+              position: groundPos,
+              ellipsoid: {
+                radii: new Cartesian3(tier.radius, tier.radius, tier.radius),
+                material: Color.fromCssColorString(tier.color),
+                outline: false,
+                maximumCone: CesiumMath.PI_OVER_TWO
+              }
+            }));
+          });
 
         // ALIGNMENT FIX: Use Cesium Polyline with CallbackProperty for connecting line
         newEntities.push(viewer.entities.add({
+          name: `Missile Line ${strike.id}`,
           polyline: {
             positions: new CallbackProperty(() => {
               const s = pinnedStrikesRef.current.find(x => x.id === strike.id);
@@ -183,17 +198,37 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
     });
 
     viewer.scene.requestRender();
-  }, [pinnedStrikes, viewerRef]);
+  }, [pinnedStrikes, activeStory, viewerRef]);
+
+  // Clean up all pinned entities entirely on unmount (important for HMR)
+  useEffect(() => {
+    return () => {
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && !viewer.isDestroyed()) {
+        pinnedEntitiesRef.current.forEach(pe => {
+          pe.entities.forEach(e => viewer.entities.remove(e));
+        });
+        pinnedEntitiesRef.current = [];
+        viewer.scene.requestRender();
+      }
+    };
+  }, [viewerRef]);
 
   // Handle Cursor Domes
+  const cursorEntitiesRef = useRef<Entity[]>([]);
   useEffect(() => {
     const viewer = viewerRef.current?.cesiumElement;
     if (!viewer) return;
-    const ents: Entity[] = [];
-    if (isPlacing && selectedWeaponId) {
+
+    // Clean up older cursor ents
+    cursorEntitiesRef.current.forEach(e => viewer.entities.remove(e));
+    cursorEntitiesRef.current = [];
+
+    if (isPlacing && selectedWeaponId && activeStory === 'missile-strike') {
       const weapon = WEAPONS[selectedWeaponId];
-      weapon?.tiers.forEach(tier => {
-        ents.push(viewer.entities.add({
+      weapon?.tiers.forEach((tier, i) => {
+        cursorEntitiesRef.current.push(viewer.entities.add({
+          name: `Cursor Dome Tier ${i}`,
           position: new CallbackProperty(() => hoverCartesianRef.current || Cartesian3.ZERO, false),
           show: new CallbackProperty(() => hoverCartesianRef.current !== null && isPlacing, false),
           ellipsoid: {
@@ -204,8 +239,21 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
         }));
       });
     }
-    return () => ents.forEach(e => viewer.entities.remove(e));
-  }, [isPlacing, selectedWeaponId, viewerRef]);
+
+    // Explicitly do not return cleanup here, let the array manage it on re-run
+    // so we don't accidentally remove things mid-drag if react re-renders
+  }, [isPlacing, selectedWeaponId, activeStory, viewerRef]);
+
+  // Clean up cursor on unmount
+  useEffect(() => {
+    return () => {
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && !viewer.isDestroyed()) {
+        cursorEntitiesRef.current.forEach(e => viewer.entities.remove(e));
+        cursorEntitiesRef.current = [];
+      }
+    };
+  }, [viewerRef]);
 
   // 4. Update Billboard DOM transforms
   useEffect(() => {
@@ -246,7 +294,7 @@ export const MissileMapController: React.FC<Props> = ({ viewerRef }) => {
       onMouseUp={handleDragEnd}
       onMouseLeave={handleDragEnd}
     >
-      {pinnedStrikes.map(strike => {
+      {activeStory === 'missile-strike' && pinnedStrikes.map(strike => {
         const weapon = WEAPONS[strike.weaponId];
         const isDragging = draggingId === strike.id;
 

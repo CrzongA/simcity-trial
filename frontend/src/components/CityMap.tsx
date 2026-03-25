@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { Viewer, Entity } from 'resium';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { Viewer, Entity, ImageryLayer } from 'resium';
 import { ContextMenuLogic } from './ContextMenuLogic';
 import { AdvancedControls } from './AdvancedControls';
 import { ContextMenuPopup } from './ContextMenuPopup';
 import { BillboardsOverlay } from './BillboardsOverlay';
-import { Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests } from 'cesium';
+import { UrlTemplateImageryProvider, Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests, PolylineGlowMaterialProperty } from 'cesium';
 import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
-import { BaseMapControls } from './BaseMapControls';
+import { BaseMapControls, BASE_MAPS } from './BaseMapControls';
 import { useAppSelector, useAppDispatch } from '../store';
-import { getInterpolatedSeaLevel } from '../lib/seaLevelData';
 import { StoriesMenu } from './StoriesMenu';
 import { SeaLevelChart } from './SeaLevelChart';
+import { SeaLevelMapController } from './stories/SeaLevelMapController';
 import { MissileMenu } from './stories/MissileMenu';
 import { MissileMapController } from './stories/MissileMapController';
 import { setTilesLoaded } from '../store/uiSlice';
@@ -46,8 +46,6 @@ const CityMap = () => {
   const dispatch = useAppDispatch();
   const viewerRef = useRef<any>(null);
   const [terrainProvider, setTerrainProvider] = useState<any>(null);
-  const [floodHeight, setFloodHeight] = useState<number>(0);
-  const [animatedFloodHeight, setAnimatedFloodHeight] = useState<number>(0);
   const [sse, setSse] = useState<number>(16);
   const [autoSse, setAutoSse] = useState<boolean>(true);
   const autoSseRef = useRef<boolean>(true);
@@ -59,9 +57,9 @@ const CityMap = () => {
 
   const tilesetRef = useRef<any>(null);
   // Refs for Cesium callback properties (avoids stale closures / requestRenderMode issues)
-  const animatedFloodHeightRef = useRef<number>(10);
   const waterOpacityRef = useRef<number>(0.7);
   const baseHeightRef = useRef<number>(0);
+  const activeStoryRef = useRef<string | null>(null);
 
   const [fps, setFps] = useState<number>(0);
 
@@ -75,16 +73,13 @@ const CityMap = () => {
   const activeStory = useAppSelector(state => state.story.activeStory);
   const selectedYear = useAppSelector(state => state.story.selectedYear);
 
+  // Sync activeStory to Ref for Cesium CallbackProperty usage
   useEffect(() => {
-    if (activeStory === 'sea-level-rise') {
-      const currentLevel = getInterpolatedSeaLevel(selectedYear);
-      // Data historically starts around 6.952m at Portsmouth. 
-      // Calculate realistic meters of rise above the base year.
-      const riseMeters = Math.max(0, currentLevel - 6.952 + 1.1);
-      // If we need visual exaggeration, we can multiply the delta. But let's stick to true scale first.
-      setFloodHeight(parseFloat(riseMeters.toFixed(2)));
-    }
-  }, [selectedYear, activeStory]);
+    activeStoryRef.current = activeStory;
+    // Force a scene render when story changes to ensure CallbackProperty is evaluated
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && !viewer.isDestroyed()) viewer.scene.requestRender();
+  }, [activeStory]);
 
   const fetchLocationName = async (lat: number, lng: number): Promise<string> => {
     try {
@@ -379,44 +374,6 @@ const CityMap = () => {
     }
   }, [sse, fxaaEnabled, autoSse]);
 
-  // Smooth animation for floodHeight
-  useEffect(() => {
-    let animationFrame: number;
-    const startTime = performance.now();
-    const duration = 1000; // 1 second for smooth transition
-    const startHeight = animatedFloodHeight;
-    const targetHeight = floodHeight;
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      // Easing: easeInOutQuad
-      const easedProgress = progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-      const currentHeight = startHeight + (targetHeight - startHeight) * easedProgress;
-      setAnimatedFloodHeight(currentHeight);
-      animatedFloodHeightRef.current = currentHeight; // Keep ref in sync
-
-      if (progress < 1) {
-        animationFrame = requestAnimationFrame(animate);
-      }
-    };
-
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [floodHeight]);
-
-  // Request render on animated height change
-  useEffect(() => {
-    const viewer = viewerRef.current?.cesiumElement;
-    if (viewer && !viewer.isDestroyed()) {
-      viewer.scene.requestRender();
-    }
-  }, [animatedFloodHeight]);
-
   // Sync opacity ref so CallbackProperty always reads the latest value
   useEffect(() => { waterOpacityRef.current = waterOpacity; }, [waterOpacity]);
 
@@ -481,11 +438,8 @@ const CityMap = () => {
         viewer.terrainProvider = terrain;
         viewer.scene.globe.depthTestAgainstTerrain = true;
 
-        // Remove Cesium's auto-added default imagery (Bing satellite via Ion).
+        // Default dark base colour — ensures no z-fighting or blue seams while imagery loads.
         // BaseMapControls manages all imagery layers imperatively.
-        viewer.imageryLayers.removeAll();
-
-        // Default dark base colour — no imagery, no z-fighting with photorealistic tiles.
         viewer.scene.globe.baseColor = Color.fromCssColorString('#101217');
 
         const googleKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -533,26 +487,29 @@ const CityMap = () => {
             setBaseHeight(h);
 
             if (!viewer.isDestroyed()) {
-              // Flood water volume
-              if (!waterEntityRef.current) {
-                const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
-                waterEntityRef.current = viewer.entities.add({
-                  name: 'Flood Water',
-                  polygon: {
-                    hierarchy: new ConstantProperty(new PolygonHierarchy(positions)),
-                    height: new CallbackProperty(() => baseHeightRef.current, false),
-                    extrudedHeight: new CallbackProperty(
-                      () => baseHeightRef.current + animatedFloodHeightRef.current, false
-                    ),
-                    material: new ColorMaterialProperty(
-                      new CallbackProperty(
-                        () => Color.NAVY.withAlpha(Math.max(waterOpacityRef.current, 0.1)), false
-                      )
-                    ),
-                    outline: new ConstantProperty(false),
+              // Shadow Stack: Multi-layered semi-transparent polylines to create a non-additive 
+              // darkening gradient (feathering) between the city tiles and the dark map.
+              const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
+              
+              const shadowSteps = [
+                { width: 120, alpha: 0.08 },
+                { width: 90, alpha: 0.12 },
+                { width: 60, alpha: 0.18 },
+                { width: 30, alpha: 0.25 },
+                { width: 10, alpha: 0.35 },
+              ];
+
+              shadowSteps.forEach(step => {
+                viewer.entities.add({
+                  name: `Boundary Shadow ${step.width}`,
+                  polyline: {
+                    positions: positions,
+                    width: step.width,
+                    material: Color.fromCssColorString('#0a0b0d').withAlpha(step.alpha),
+                    clampToGround: true,
                   }
                 });
-              }
+              });
             }
           });
 
@@ -571,13 +528,20 @@ const CityMap = () => {
             dispatch(setTilesLoaded(true));
             clearInterval(checkInterval);
             clearTimeout(tilesetTimeout);
-            tileset.initialTilesLoaded.removeEventListener(finishLoading);
+            tileset.allTilesLoaded.removeEventListener(onAllTilesLoaded);
           };
+
+          const onAllTilesLoaded = () => finishLoading('allTilesLoaded Event');
+
+          // Poll the boolean property as a backup
           const checkInterval = setInterval(() => {
-            if (tileset.allTilesLoaded || (tileset as any).ready) finishLoading('Property Check');
-          }, 500);
-          const tilesetTimeout = setTimeout(() => finishLoading('Timeout Fallback'), 10000);
-          tileset.initialTilesLoaded.addEventListener(finishLoading);
+            if ((tileset as any).tilesLoaded) finishLoading('tilesLoaded Property Check');
+          }, 1000);
+
+          // Safety fallback — never block the user forever
+          const tilesetTimeout = setTimeout(() => finishLoading('Timeout Fallback (30s)'), 30000);
+
+          tileset.allTilesLoaded.addEventListener(onAllTilesLoaded);
           // --- End Loading Detection ---
 
           if (viewer.scene.postProcessStages && viewer.scene.postProcessStages.fxaa) {
@@ -597,10 +561,24 @@ const CityMap = () => {
 
     const globalTimeout = setTimeout(() => {
       if (isMounted) dispatch(setTilesLoaded(true));
-    }, 15000);
+    }, 35000);
 
     return () => { isMounted = false; clearTimeout(globalTimeout); };
   }, []);
+
+  const baseLayerId = useAppSelector(state => state.ui.baseLayer);
+  const baseMapOption = BASE_MAPS.find(m => m.id === baseLayerId);
+
+  const imageryProvider = useMemo(() => {
+    if (baseMapOption?.url) {
+      return new UrlTemplateImageryProvider({
+        url: baseMapOption.url,
+        subdomains: baseMapOption.subdomains,
+        credit: baseMapOption.credit,
+      });
+    }
+    return null;
+  }, [baseMapOption]);
 
   return (
     <div
@@ -622,10 +600,16 @@ const CityMap = () => {
         sceneModePicker={false}
         baseLayerPicker={false}
         requestRenderMode={false}
+        baseLayer={false}
       >
         <ContextMenuLogic setContextMenu={setContextMenu} billboards={billboards} billboardsRef={billboardsRef} />
 
-        {/* Imagery layer removed; globe.baseColor provides the dark background */}
+        {imageryProvider && (
+          <ImageryLayer
+            key={baseLayerId}
+            imageryProvider={imageryProvider}
+          />
+        )}
 
         {/* All entities are managed imperatively via viewer.entities for requestRenderMode compatibility */}
       </Viewer>
@@ -633,9 +617,11 @@ const CityMap = () => {
       {activeStory === 'sea-level-rise' && (
         <>
           <SeaLevelChart />
-          <SimulationControls floodHeight={floodHeight} setFloodHeight={setFloodHeight} />
+          {/* SimulationControls will no longer control the local state, but we removed it for now or keep it if it triggers Redux instead */}
         </>
       )}
+
+      <SeaLevelMapController viewerRef={viewerRef} baseHeight={baseHeight} waterOpacity={waterOpacity} />
 
       {activeStory === 'missile-strike' && (
         <>
