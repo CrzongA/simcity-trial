@@ -11,7 +11,7 @@ export const SeaLevelChart: React.FC = () => {
 
   // Parse data and calculate layout scales
   const data = useMemo(() => parseSeaLevelData(), []);
-  
+
   const width = 320;
   const height = 180;
   const padding = { top: 20, right: 20, bottom: 30, left: 40 };
@@ -128,7 +128,7 @@ export const SeaLevelChart: React.FC = () => {
         >
           <g transform={`translate(${padding.left}, ${padding.top})`}>
             {/* Grid Lines */}
-            {[yDomainMin, yDomainMin+0.5, yDomainMin+1, yDomainMin+1.5, yDomainMin+2, yDomainMin+2.5, yDomainMin+3].map((yVal, i) => {
+            {[yDomainMin, yDomainMin + 0.5, yDomainMin + 1, yDomainMin + 1.5, yDomainMin + 2, yDomainMin + 2.5, yDomainMin + 3].map((yVal, i) => {
               if (yVal > yDomainMax) return null;
               const yPos = getY(yVal);
               return (
@@ -173,20 +173,20 @@ export const SeaLevelChart: React.FC = () => {
               stroke="#00ffcc"
               strokeWidth={1.5}
             />
-            
+
             {/* Value Indicator Dot */}
-             <circle
-                cx={selectedX}
-                cy={getY(currentVal || minVal)}
-                r={4}
-                fill="#101217"
-                stroke="#00ffcc"
-                strokeWidth={2}
-             />
+            <circle
+              cx={selectedX}
+              cy={getY(currentVal || minVal)}
+              r={4}
+              fill="#101217"
+              stroke="#00ffcc"
+              strokeWidth={2}
+            />
           </g>
         </svg>
       </div>
-      
+
       {/* Legend */}
       <div style={{ display: 'flex', gap: '16px', marginTop: '12px', justifyContent: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -196,6 +196,23 @@ export const SeaLevelChart: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{ width: '12px', height: '2px', borderTop: '2px dashed #ccff00' }}></div>
           <span style={{ fontSize: '10px', color: '#888' }}>RCP 8.5 Projection</span>
+        </div>
+      </div>
+
+      {/* Data Source Footnote */}
+      <div style={{
+        marginTop: '16px',
+        paddingTop: '12px',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
+        fontSize: '9px',
+        color: '#666',
+        lineHeight: 1.4
+      }}>
+        <div>
+          Historical data: <a href="https://psmsl.org/data/obtaining/stations/350.php" target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'underline' }}>NOC PSMSL</a>
+        </div>
+        <div style={{ marginTop: '2px' }}>
+          Projections: <a href="https://data.ceda.ac.uk/badc/ukcp18/data/marine-sim/ext-sea-lev-expl" target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'underline' }}>CEDA UKCP18</a>
         </div>
       </div>
     </div>

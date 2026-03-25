@@ -75,7 +75,7 @@ const CityMap = () => {
       const currentLevel = getInterpolatedSeaLevel(selectedYear);
       // Data historically starts around 6.952m at Portsmouth. 
       // Calculate realistic meters of rise above the base year.
-      const riseMeters = Math.max(0, currentLevel - 6.952);
+      const riseMeters = Math.max(0, currentLevel - 6.952 + 1.1);
       // If we need visual exaggeration, we can multiply the delta. But let's stick to true scale first.
       setFloodHeight(parseFloat(riseMeters.toFixed(2)));
     }
@@ -251,7 +251,7 @@ const CityMap = () => {
       }
 
       const newSurfacePos = Cartesian3.fromRadians(newCarto.longitude, newCarto.latitude, terrainHeight);
-      
+
       // Calculate real-time readings during drag
       const mslHeight = Math.round(terrainHeight - 47);
       const bHeight = Math.max(0, Math.round(altitude - terrainHeight));
@@ -528,21 +528,6 @@ const CityMap = () => {
             setBaseHeight(h);
 
             if (!viewer.isDestroyed()) {
-              // // Diagnostic label
-              // viewer.entities.add({
-              //   position: Cartesian3.fromDegrees(PORTSMOUTH_LON, PORTSMOUTH_LAT, h + 80),
-              //   label: {
-              //     text: `Base: ${h.toFixed(1)}m`,
-              //     font: '14px sans-serif',
-              //     fillColor: Color.AQUA,
-              //     outlineColor: Color.BLACK,
-              //     outlineWidth: 2,
-              //     style: 2,
-              //     verticalOrigin: VerticalOrigin.BOTTOM,
-              //     disableDepthTestDistance: Number.POSITIVE_INFINITY
-              //   }
-              // });
-
               // Flood water volume
               if (!waterEntityRef.current) {
                 const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
