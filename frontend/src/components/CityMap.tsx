@@ -723,6 +723,50 @@ const CityMap = () => {
 
       <StoriesMenu />
       <BannerOverlay />
+
+      {/* Map Controls Hint */}
+      <div style={{
+        position: 'fixed',
+        bottom: 24,
+        left: 24,
+        zIndex: 1000,
+        background: 'rgba(16, 18, 23, 0.75)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(0, 243, 255, 0.2)',
+        borderRadius: '8px',
+        padding: '8px 12px',
+        pointerEvents: 'none',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '3px',
+      }}>
+        {[
+          ['Drag', 'Pan'],
+          ['Ctrl + Drag', 'Rotate'],
+          ['Scroll', 'Zoom'],
+          ['Right Click', 'Context Menu'],
+        ].map(([key, action]) => (
+          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              fontFamily: 'monospace',
+              fontSize: '0.65rem',
+              color: '#00f3ff',
+              background: 'rgba(0, 243, 255, 0.1)',
+              border: '1px solid rgba(0, 243, 255, 0.3)',
+              borderRadius: '4px',
+              padding: '1px 6px',
+              letterSpacing: '0.05em',
+              whiteSpace: 'nowrap',
+            }}>{key}</span>
+            <span style={{
+              fontFamily: 'monospace',
+              fontSize: '0.65rem',
+              color: 'rgba(255,255,255,0.5)',
+              letterSpacing: '0.05em',
+            }}>{action}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
