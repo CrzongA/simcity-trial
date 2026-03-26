@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Math as CesiumMath } from 'cesium';
+import { Math as CesiumMath, JulianDate } from 'cesium';
 
 interface CameraPos {
   lon: number;
@@ -49,7 +49,25 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
   const [cameraPos, setCameraPos] = useState<CameraPos | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sunTime, setSunTime] = useState<number>(new Date().getHours() + new Date().getMinutes() / 60);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Sync sun time with Cesium clock
+  useEffect(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+
+    // Get today at midnight
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const julianStart = JulianDate.fromDate(startOfDay);
+
+    // Set time to selected sunTime (hours)
+    const targetDate = JulianDate.addHours(julianStart, sunTime, new JulianDate());
+    viewer.clock.currentTime = targetDate;
+    viewer.clock.shouldAnimate = false; // Manual control
+    viewer.scene.requestRender();
+  }, [sunTime]);
 
   useEffect(() => {
     if (isAdvancedOpen) {
@@ -320,6 +338,52 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
             </div>
             <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
               Foveated: full quality at screen centre, reduced at edges
+            </div>
+          </div>
+
+          <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '4px 0' }} />
+
+          {/* Day / Night Cycle */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#aaa', letterSpacing: '0.4px', display: 'flex', justifyContent: 'space-between' }}>
+              <span>🌞 DAY / NIGHT CYCLE</span>
+              <button
+                onClick={() => {
+                  const now = new Date();
+                  setSunTime(now.getHours() + now.getMinutes() / 60);
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#ccc',
+                  borderRadius: '4px',
+                  padding: '2px 7px',
+                  fontSize: '9px',
+                  cursor: 'pointer',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Reset to Now
+              </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+              <label>Time of Day</label>
+              <span style={{ color: '#00ffcc', fontFamily: 'monospace' }}>
+                {Math.floor(sunTime).toString().padStart(2, '0')}:
+                {Math.floor((sunTime % 1) * 60).toString().padStart(2, '0')}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="23.99"
+              step="0.1"
+              value={sunTime}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSunTime(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#00ffcc' }}
+            />
+            <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
+              Drag to move the sun. Lighting updates in real-time.
             </div>
           </div>
         </div>
