@@ -75,19 +75,19 @@ const BannerOverlay: React.FC = () => {
           marginBottom: '8px',
           fontFamily: 'monospace',
         }}>
-          City in Time
+          Sim City: Portsmouth
         </h1>
         <h2 style={{
           fontSize: '1.2rem',
           fontWeight: 300,
-          letterSpacing: '0.4em',
+          letterSpacing: '0.2em',
           color: '#00f3ff',
           textTransform: 'uppercase' as const,
           opacity: 0.8,
           fontFamily: 'monospace',
           margin: 0,
         }}>
-          Portsmouth
+          (Not the EA game, pls don't sue me)
         </h2>
       </div>
 
