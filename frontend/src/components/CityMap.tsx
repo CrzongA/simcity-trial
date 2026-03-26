@@ -17,6 +17,8 @@ import { MissileMapController } from './stories/MissileMapController';
 import { DroneMapController } from './stories/DroneMapController';
 import { DroneHUD } from './stories/DroneHUD';
 import { DroneSettings } from './stories/DroneSettings';
+import { ModelDesignMenu } from './stories/ModelDesignMenu';
+import { ModelDesignMapController } from './stories/ModelDesignMapController';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
 import CityTitleOverlay from './CityTitleOverlay';
@@ -673,6 +675,13 @@ const CityMap = () => {
             horizonRef={droneHorizonRef}
             ctrlRef={droneCtrlRef}
           />
+        </>
+      )}
+
+      {activeStory === 'model-design' && (
+        <>
+          <ModelDesignMenu viewerRef={viewerRef} />
+          <ModelDesignMapController viewerRef={viewerRef} />
         </>
       )}
 

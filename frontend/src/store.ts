@@ -5,6 +5,7 @@ import seaLevelReducer from './store/seaLevelSlice';
 import missileStrikeReducer from './store/missileStrikeSlice';
 import uiReducer from './store/uiSlice';
 import droneReducer from './store/droneSlice';
+import modelDesignReducer from './store/modelDesignSlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ export const store = configureStore({
     missileStrike: missileStrikeReducer,
     ui: uiReducer,
     drone: droneReducer,
+    modelDesign: modelDesignReducer,
   },
 });
 

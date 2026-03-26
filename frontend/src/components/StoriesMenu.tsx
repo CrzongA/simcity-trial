@@ -6,6 +6,7 @@ const STORIES = [
   { id: 'sea-level-rise', label: 'Sea Level Rise', emoji: '🌊' },
   { id: 'missile-strike', label: 'Missile Strike', emoji: '🚀' },
   { id: 'drone-flying', label: 'Drone FPV', emoji: '🚁' },
+  { id: 'model-design', label: 'Design Portsmouth', emoji: '🏗️' },
 ];
 
 const HINT_KEY = 'cityintime_stories_hint_shown';
