@@ -42,7 +42,7 @@ interface DroneState {
 const initialState: DroneState = {
   gamepadIndex: null,
   // Mode 2: left stick = throttle(Y=1) + yaw(X=0), right stick = pitch(Y=3) + roll(X=2)
-  axisMapping: { throttle: 1, yaw: 0, pitch: 3, roll: 2 },
+  axisMapping: { throttle: 2, yaw: 3, pitch: 1, roll: 0 },
   buttonMapping: { flightModeToggle: 0, speedTierUp: 5, speedTierDown: 4 },
   calibration: {
     throttle: { ...defaultCalibration },
