@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedYear, setManualSeaLevelRise } from '../store/seaLevelSlice';
-import { parseSeaLevelData } from '../lib/seaLevelData';
+import { parseSeaLevelData, getInterpolatedSeaLevel } from '../lib/seaLevelData';
 
 export const SeaLevelChart: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -10,6 +10,13 @@ export const SeaLevelChart: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [overrideOpen, setOverrideOpen] = useState(false);
+
+  // Keep override slider in sync with projection when year changes
+  useEffect(() => {
+    if (!overrideOpen) return;
+    const projected = parseFloat(Math.max(0, getInterpolatedSeaLevel(selectedYear) - 6.952 + 1.1).toFixed(2));
+    dispatch(setManualSeaLevelRise(projected));
+  }, [selectedYear, overrideOpen]);
 
   // Parse data and calculate layout scales
   const data = useMemo(() => parseSeaLevelData(), []);
