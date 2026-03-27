@@ -232,10 +232,6 @@ const CityMap = () => {
     const ray = viewer.camera.getPickRay(mousePos);
     if (!ray) return;
 
-    // Get current altitude from the billboard's cartesian
-    const carto = Cartographic.fromCartesian(billboard.cartesian);
-    const altitude = carto.height;
-
     // Drag on a plane horizontal to the current position (Tangent Plane at altitude)
     const normal = Ellipsoid.WGS84.geodeticSurfaceNormal(billboard.cartesian);
     const dragPlane = Plane.fromPointNormal(billboard.cartesian, normal);
@@ -269,16 +265,17 @@ const CityMap = () => {
 
       const newSurfacePos = Cartesian3.fromRadians(newCarto.longitude, newCarto.latitude, terrainHeight);
 
-      // Calculate real-time readings during drag
+      // Calculate real-time readings during drag.
+      // Building height requires a scene surface pick (done on initial click only);
+      // terrain sampling during drag gives no building surface info, so reset to 0.
       const mslHeight = Math.round(terrainHeight - 47);
-      const bHeight = Math.max(0, Math.round(altitude - terrainHeight));
 
       setBillboards(prev => prev.map(b => b.id === draggingId ? {
         ...b,
         cartesian: newPos,
         surfaceCartesian: newSurfacePos,
         height: mslHeight,
-        buildingHeight: bHeight,
+        buildingHeight: 0,
         locationName: "Moving...",
         loading: true
       } : b));
