@@ -12,6 +12,10 @@ export default defineConfig({
     }
   },
   server: {
+    fs: {
+      // Allow imports from the monorepo root (../data/portsmouth_geojson.json)
+      allow: ['..'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

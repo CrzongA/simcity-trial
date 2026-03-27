@@ -218,35 +218,91 @@ export async function fetchAqicnStationsInBounds(
 
   const rawData = Array.isArray(response.data.data) ? response.data.data : [];
 
+  // Log each raw station so we can diagnose filter issues
+  rawData.forEach(s => {
+    console.log(`  [aqicn] raw station uid=${s.uid} aqi="${s.aqi}" geo=${JSON.stringify(s.station?.geo)} name="${s.station?.name}"`);
+  });
+
   return rawData
     .filter((s) => {
-      const aqi = parseAqi(s.aqi);
-      // Skip stations with no AQI data or missing coordinates
-      return aqi !== null && Array.isArray(s.station?.geo) && s.station.geo.length >= 2;
+      // Only require valid coordinates — include stations with no current AQI reading
+      return Array.isArray(s.station?.geo) && s.station.geo.length >= 2;
     })
     .map(normaliseBoundsStation);
 }
 
 /**
+ * Search for stations by keyword (e.g. "Portsmouth").
+ * Returns all matching stations the token has access to, with their current AQI.
+ * The response shape is identical to the bounds endpoint so we reuse the same types.
+ */
+export async function fetchAqicnStationsBySearch(
+  keyword: string,
+  token: string,
+): Promise<AqicnStation[]> {
+  const url = `${BASE_URL}/search/?keyword=${encodeURIComponent(keyword)}&token=${token}`;
+  const response = await axios.get<AqicnBoundsResponse>(url, { timeout: 10_000 });
+
+  console.log(`[aqicn] search "${keyword}" — status: "${response.data.status}", results: ${Array.isArray(response.data.data) ? response.data.data.length : typeof response.data.data}`);
+
+  if (response.data.status !== 'ok') {
+    console.warn(`[aqicn] search API error:`, JSON.stringify(response.data).slice(0, 300));
+    throw new Error(`AQICN search API returned status: ${response.data.status}`);
+  }
+
+  const rawData = Array.isArray(response.data.data) ? response.data.data : [];
+
+  rawData.forEach(s => {
+    console.log(`  [aqicn] search result uid=${s.uid} aqi="${s.aqi}" geo=${JSON.stringify(s.station?.geo)} name="${s.station?.name}"`);
+  });
+
+  return rawData
+    .filter((s) => Array.isArray(s.station?.geo) && s.station.geo.length >= 2)
+    .map(normaliseBoundsStation);
+}
+
+/**
+ * Try a single AQICN feed URL variant. Returns the parsed feed data on success,
+ * or null if the response contains an error (so the caller can try the next variant).
+ * Throws only on network/HTTP failure.
+ */
+async function tryFeedVariant(
+  slug: string,
+  token: string,
+): Promise<AqicnFeedData | null> {
+  const url = `${BASE_URL}/feed/${slug}/?token=${token}`;
+  const response = await axios.get<AqicnFeedResponse>(url, { timeout: 10_000 });
+
+  if (response.data.status !== 'ok') return null;
+
+  const feed = response.data.data;
+  const feedAny = feed as unknown as { status?: string };
+  if (feedAny.status === 'error') return null;
+
+  if (!feed.city?.geo) return null;
+
+  return feed;
+}
+
+/**
  * Fetch detailed reading for a single station by its numeric UID.
- * Throws on failure so callers can handle/cache as appropriate.
+ * Tries three slug formats in order: @{uid}, A{uid}, {uid} (bare).
+ * Throws if all variants fail.
  */
 export async function fetchAqicnStationDetail(
   uid: number,
   token: string,
 ): Promise<AqicnStationDetail> {
-  const url = `${BASE_URL}/feed/@${uid}/?token=${token}`;
-  const response = await axios.get<AqicnFeedResponse>(url, { timeout: 10_000 });
+  const variants = [`@${uid}`, `A${uid}`, `${uid}`];
 
-  console.log(`[aqicn] feed response for uid ${uid} — status: "${response.data.status}"`);
-
-  if (response.data.status !== 'ok') {
-    console.warn(`[aqicn] feed API error payload:`, JSON.stringify(response.data).slice(0, 300));
-    throw new Error(`AQICN feed API returned status: ${response.data.status}`);
+  for (const slug of variants) {
+    const feed = await tryFeedVariant(slug, token);
+    if (feed) {
+      console.log(`[aqicn] feed uid ${uid} — succeeded with slug "${slug}"  city: "${feed.city?.name}"  AQI: ${feed.aqi}  iaqi keys: [${Object.keys(feed.iaqi ?? {}).join(', ')}]`);
+      return normaliseFeedData(uid, feed);
+    }
+    console.log(`[aqicn] feed uid ${uid} — slug "${slug}" returned no data, trying next…`);
   }
 
-  const feed = response.data.data;
-  console.log(`[aqicn] feed data — city: "${feed.city?.name}"  AQI: ${feed.aqi}  dominant: ${feed.dominentpol ?? '—'}  iaqi keys: [${Object.keys(feed.iaqi ?? {}).join(', ')}]`);
-
-  return normaliseFeedData(uid, feed);
+  throw new Error(`AQICN feed uid ${uid}: all slug variants (@, A, bare) failed`);
 }

@@ -40,6 +40,7 @@ export const AirQualityMapController: React.FC<Props> = ({ viewerRef }) => {
   const stationsRef = useRef<AirQualityStation[]>([]);
   const showBillboardsRef = useRef(showBillboards);
   const billboardsRef = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const stationEntitiesRef = useRef<Entity[]>([]);
   const heatmapEntitiesRef = useRef<Entity[]>([]);
 
@@ -153,23 +154,101 @@ export const AirQualityMapController: React.FC<Props> = ({ viewerRef }) => {
     if (!viewer) return;
 
     const updatePositions = () => {
+      // ── Phase 1: compute anchor screen positions ──────────────────────────
+      interface Entry {
+        id: string; el: HTMLDivElement;
+        anchorX: number; anchorY: number; // original screen position (bottom-centre)
+        x: number; y: number;             // adjusted position after push-apart
+        w: number; h: number;
+      }
+      const entries: Entry[] = [];
+
       billboardsRef.current.forEach((el, id) => {
         if (!el) return;
-        if (!showBillboardsRef.current) {
-          el.style.display = 'none';
-          return;
-        }
+        if (!showBillboardsRef.current) { el.style.display = 'none'; return; }
         const station = stationsRef.current.find(s => s.id === id);
         if (!station) { el.style.display = 'none'; return; }
+
         const pos = Cartesian3.fromDegrees(station.lng, station.lat, 200);
         const winPos = SceneTransforms.worldToWindowCoordinates(viewer.scene, pos);
-        if (winPos) {
-          el.style.display = 'block';
-          el.style.transform = `translate(-50%, -100%) translate(${winPos.x}px, ${winPos.y - 15}px)`;
-        } else {
-          el.style.display = 'none';
-        }
+        if (!winPos) { el.style.display = 'none'; return; }
+
+        el.style.display = 'block';
+        const ax = winPos.x;
+        const ay = winPos.y - 15;
+        entries.push({ id, el, anchorX: ax, anchorY: ay, x: ax, y: ay, w: el.offsetWidth, h: el.offsetHeight });
       });
+
+      // ── Phase 2: iterative push-apart collision resolution ────────────────
+      const PAD = 6; // pixels of breathing room between billboards
+      for (let iter = 0; iter < 20; iter++) {
+        let anyMoved = false;
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const a = entries[i], b = entries[j];
+            // Each billboard occupies [x - w/2, x + w/2] × [y - h, y]
+            const overlapX = (a.w + b.w) / 2 + PAD - Math.abs(a.x - b.x);
+            const overlapY = (a.h + b.h) / 2 + PAD - Math.abs(a.y - b.h / 2 - (b.y - b.h / 2));
+            if (overlapX <= 0 || overlapY <= 0) continue;
+
+            // Resolve along the axis of least overlap
+            const half = 0.5;
+            if (overlapX < overlapY) {
+              const push = overlapX * half;
+              a.x += a.x <= b.x ? -push : push;
+              b.x += b.x <= a.x ? -push : push;
+            } else {
+              const push = overlapY * half;
+              a.y += a.y <= b.y ? -push : push;
+              b.y += b.y <= a.y ? -push : push;
+            }
+            anyMoved = true;
+          }
+        }
+        if (!anyMoved) break;
+      }
+
+      // ── Phase 3: apply positions ──────────────────────────────────────────
+      entries.forEach(e => {
+        e.el.style.transform = `translate(-50%, -100%) translate(${e.x}px, ${e.y}px)`;
+      });
+
+      // ── Phase 4: draw leader lines in SVG when displaced ─────────────────
+      const svg = svgRef.current;
+      if (svg) {
+        // Remove old lines
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        const LEADER_THRESHOLD = 8; // px — skip line if barely moved
+        entries.forEach(e => {
+          const dx = e.x - e.anchorX;
+          const dy = e.y - e.anchorY;
+          if (Math.sqrt(dx * dx + dy * dy) < LEADER_THRESHOLD) return;
+
+          const station = stationsRef.current.find(s => s.id === e.id);
+          const color = station?.aqiColor ?? '#ffffff';
+
+          // Line from billboard bottom-centre to original anchor
+          const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          lineEl.setAttribute('x1', String(e.x));
+          lineEl.setAttribute('y1', String(e.y));       // billboard bottom-centre
+          lineEl.setAttribute('x2', String(e.anchorX));
+          lineEl.setAttribute('y2', String(e.anchorY)); // original anchor
+          lineEl.setAttribute('stroke', color);
+          lineEl.setAttribute('stroke-width', '1.5');
+          lineEl.setAttribute('stroke-opacity', '0.5');
+          lineEl.setAttribute('stroke-dasharray', '4 3');
+          svg.appendChild(lineEl);
+
+          // Dot at the anchor
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', String(e.anchorX));
+          dot.setAttribute('cy', String(e.anchorY));
+          dot.setAttribute('r', '3');
+          dot.setAttribute('fill', color);
+          dot.setAttribute('fill-opacity', '0.6');
+          svg.appendChild(dot);
+        });
+      }
     };
 
     const removeListener = viewer.scene.preRender.addEventListener(updatePositions);
@@ -186,6 +265,11 @@ export const AirQualityMapController: React.FC<Props> = ({ viewerRef }) => {
       width: '100%', height: '100%',
       pointerEvents: 'none', zIndex: 100, overflow: 'hidden',
     }}>
+      {/* Leader lines drawn behind the billboard cards */}
+      <svg
+        ref={svgRef}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}
+      />
       {showBillboards && stations.map(station => (
         <AirQualityBillboard
           key={station.id}

@@ -9,10 +9,12 @@ import { Router, Request, Response } from 'express';
 import { isWithinPortseaIsland } from '../utils/geo';
 import {
   fetchAqicnStationsInBounds,
+  fetchAqicnStationsBySearch,
   fetchAqicnStationDetail,
   AqicnStation,
+  AqicnStationDetail,
 } from '../services/aqicn';
-import { fetchIQAirPortsmouth, IQAirStation } from '../services/iqair';
+import { fetchAllIQAirPortsmouthStations, IQAirStation } from '../services/iqair';
 import {
   stationsCache,
   stationDetailCache,
@@ -180,23 +182,85 @@ async function fetchLiveStations(): Promise<{
 
   // --- AQICN ---
   if (aqicnToken && aqicnToken !== 'your_token_here') {
-    console.log('[airQuality] AQICN: fetching stations in Portsea Island bounding box…');
+    // Run bounds query and keyword search in parallel, then merge by UID
+    console.log('[airQuality] AQICN: fetching via bounds + search in parallel…');
     try {
-      const rawStations = await fetchAqicnStationsInBounds(aqicnToken);
-      console.log(`[airQuality] AQICN: ${rawStations.length} station(s) returned from bounding box`);
+      const [boundsStations, searchStations] = await Promise.allSettled([
+        fetchAqicnStationsInBounds(aqicnToken),
+        fetchAqicnStationsBySearch('Portsmouth', aqicnToken),
+      ]);
 
-      // Filter to stations within the Portsea Island polygon
-      const filtered = rawStations.filter((s) => isWithinPortseaIsland(s.lat, s.lng));
-      console.log(`[airQuality] AQICN: ${filtered.length} station(s) within Portsea Island polygon`);
-
-      if (filtered.length > 0) {
-        filtered.forEach(s => {
-          console.log(`  • ${s.name} (${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}) — AQI ${s.aqi ?? '—'} [${s.aqiCategory}]`);
-        });
+      const allRaw: AqicnStation[] = [];
+      if (boundsStations.status === 'fulfilled') {
+        console.log(`[airQuality] AQICN bounds: ${boundsStations.value.length} station(s)`);
+        allRaw.push(...boundsStations.value);
+      } else {
+        console.warn('[airQuality] AQICN bounds failed:', boundsStations.reason);
+      }
+      if (searchStations.status === 'fulfilled') {
+        console.log(`[airQuality] AQICN search: ${searchStations.value.length} station(s)`);
+        // Merge: add search results not already present by uid
+        const existingIds = new Set(allRaw.map((s) => s.id));
+        for (const s of searchStations.value) {
+          if (!existingIds.has(s.id)) allRaw.push(s);
+        }
+      } else {
+        console.warn('[airQuality] AQICN search failed:', searchStations.reason);
       }
 
-      stations = filtered.map(normaliseAqicn);
-      sources.push('aqicn');
+      // Filter to stations within the Portsea Island polygon
+      const filtered = allRaw.filter((s) => isWithinPortseaIsland(s.lat, s.lng));
+      console.log(`[airQuality] AQICN: ${filtered.length}/${allRaw.length} station(s) within Portsea Island`);
+
+      // Enrich each station with full pollutant detail from the feed endpoint
+      console.log('[airQuality] AQICN: fetching pollutant detail for each station…');
+      const enriched = await Promise.all(
+        filtered.map(async (s) => {
+          const uid = parseInt(s.id.replace('aqicn-', ''), 10);
+          try {
+            const detail = await fetchAqicnStationDetail(uid, aqicnToken);
+            console.log(`  • ${detail.name} (${detail.lat.toFixed(4)}, ${detail.lng.toFixed(4)}) — AQI ${detail.aqi ?? '—'}  PM2.5 ${detail.pollutants.pm25 ?? '—'}  PM10 ${detail.pollutants.pm10 ?? '—'}  NO2 ${detail.pollutants.no2 ?? '—'}  O3 ${detail.pollutants.o3 ?? '—'}`);
+            return detail;
+          } catch (err) {
+            console.warn(`  • ${s.name} detail failed (uid ${uid}): ${(err as Error).message} — using summary data`);
+            return s;
+          }
+        }),
+      );
+
+      stations = enriched.map(normaliseAqicn);
+
+      // Also fetch any UIDs pinned in AQICN_STATION_UIDS that aren't already present
+      const pinnedUids: number[] = (process.env['AQICN_STATION_UIDS'] ?? '')
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n));
+
+      if (pinnedUids.length > 0) {
+        const existingIds = new Set(stations.map((s) => s.id));
+        const missingUids = pinnedUids.filter((uid) => !existingIds.has(`aqicn-${uid}`));
+        if (missingUids.length > 0) {
+          console.log(`[airQuality] AQICN: fetching ${missingUids.length} pinned UID(s) not found via bounds/search: ${missingUids.join(', ')}`);
+          const pinnedResults = await Promise.all(
+            missingUids.map(async (uid) => {
+              try {
+                const detail = await fetchAqicnStationDetail(uid, aqicnToken);
+                console.log(`  • [pinned] ${detail.name} (${detail.lat.toFixed(4)}, ${detail.lng.toFixed(4)}) — AQI ${detail.aqi ?? '—'}  PM2.5 ${detail.pollutants.pm25 ?? '—'}`);
+                return detail;
+              } catch (err) {
+                console.warn(`  • [pinned] uid ${uid} failed: ${(err as Error).message}`);
+                return null;
+              }
+            }),
+          );
+          const validPinned = pinnedResults.filter((s): s is AqicnStationDetail => s !== null);
+          stations = [...stations, ...validPinned.map(normaliseAqicn)];
+        } else {
+          console.log('[airQuality] AQICN: all pinned UIDs already found via bounds/search');
+        }
+      }
+
+      if (stations.length > 0) sources.push('aqicn');
     } catch (err) {
       console.warn('[airQuality] AQICN fetch failed:', (err as Error).message);
     }
@@ -206,26 +270,22 @@ async function fetchLiveStations(): Promise<{
 
   // --- IQAir ---
   if (iqairKey && iqairKey !== 'your_key_here') {
-    console.log('[airQuality] IQAir: fetching Portsmouth city data…');
+    console.log('[airQuality] IQAir: fetching Portsmouth stations…');
     try {
-      const iqStation = await fetchIQAirPortsmouth(iqairKey);
-      if (iqStation) {
-        console.log(`[airQuality] IQAir: received data for "${iqStation.name}" (${iqStation.lat.toFixed(4)}, ${iqStation.lng.toFixed(4)})`);
-        console.log(`  • AQI ${iqStation.aqi ?? '—'} [${iqStation.aqiCategory}]  dominant: ${iqStation.dominantPollutant ?? '—'}`);
-        console.log(`  • PM2.5 ${iqStation.pollutants.pm25 ?? '—'}  PM10 ${iqStation.pollutants.pm10 ?? '—'}  NO2 ${iqStation.pollutants.no2 ?? '—'}  O3 ${iqStation.pollutants.o3 ?? '—'}`);
-        console.log(`  • Temp ${iqStation.temperature ?? '—'}°C  Humidity ${iqStation.humidity ?? '—'}%  Wind ${iqStation.wind.speed ?? '—'} m/s @ ${iqStation.wind.direction ?? '—'}°`);
-
+      const iqStations = await fetchAllIQAirPortsmouthStations(iqairKey);
+      console.log(`[airQuality] IQAir: received ${iqStations.length} station(s)`);
+      for (const iqStation of iqStations) {
+        console.log(`  • "${iqStation.name}" (${iqStation.lat.toFixed(4)}, ${iqStation.lng.toFixed(4)})  AQI ${iqStation.aqi ?? '—'} [${iqStation.aqiCategory}]  dominant: ${iqStation.dominantPollutant ?? '—'}`);
+        console.log(`    PM2.5 ${iqStation.pollutants.pm25 ?? '—'}  PM10 ${iqStation.pollutants.pm10 ?? '—'}  NO2 ${iqStation.pollutants.no2 ?? '—'}  O3 ${iqStation.pollutants.o3 ?? '—'}`);
         const prevCount = stations.length;
         stations = mergeIQAirStation(stations, iqStation);
         if (stations.length > prevCount) {
-          console.log(`[airQuality] IQAir: added as new station (no nearby AQICN station within 0.5 km)`);
+          console.log(`    → added as new station`);
         } else {
-          console.log(`[airQuality] IQAir: merged into existing nearby AQICN station`);
+          console.log(`    → merged into existing nearby station`);
         }
-        if (!sources.includes('iqair')) sources.push('iqair');
-      } else {
-        console.warn('[airQuality] IQAir: response was empty');
       }
+      if (iqStations.length > 0 && !sources.includes('iqair')) sources.push('iqair');
     } catch (err) {
       console.warn('[airQuality] IQAir fetch failed:', (err as Error).message);
     }

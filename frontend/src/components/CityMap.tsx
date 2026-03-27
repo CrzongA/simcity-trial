@@ -5,7 +5,7 @@ import { AdvancedControls } from './AdvancedControls';
 import { ContextMenuPopup } from './ContextMenuPopup';
 import { BillboardsOverlay } from './BillboardsOverlay';
 import { UrlTemplateImageryProvider, Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests, PolylineGlowMaterialProperty } from 'cesium';
-import { PORTSEA_POLYGON_COORDS } from '@/lib/consts';
+import { PORTSEA_POLYGON_COORDS, PORTSEA_ALL_RINGS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
 import { BaseMapControls, BASE_MAPS } from './BaseMapControls';
 import { useAppSelector, useAppDispatch } from '../store';
@@ -479,15 +479,14 @@ const CityMap = () => {
         }).then(tileset => {
           if (!isMounted || viewer.isDestroyed()) return;
 
-          const polygonPositionsForWater = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
+          // Build one ClippingPolygon per ring in the MultiPolygon boundary
+          const clippingPolygons = PORTSEA_ALL_RINGS.map(ring =>
+            new ClippingPolygon({ positions: Cartesian3.fromDegreesArray(ring.flat()) })
+          );
 
           // Re-apply boundary clipping to the tileset (strictly Portsmouth)
           tileset.clippingPolygons = new ClippingPolygonCollection({
-            polygons: [
-              new ClippingPolygon({
-                positions: polygonPositionsForWater
-              })
-            ],
+            polygons: clippingPolygons,
             inverse: true // Clip OUTSIDE the polygon
           });
 
@@ -496,9 +495,7 @@ const CityMap = () => {
           // The tileset fully covers this area, so there is no visible void.
           // The water entity uses absolute sampled heights and is unaffected.
           viewer.scene.globe.clippingPolygons = new ClippingPolygonCollection({
-            polygons: [
-              new ClippingPolygon({ positions: polygonPositionsForWater })
-            ],
+            polygons: clippingPolygons,
             // inverse: false (default) → terrain hidden INSIDE the polygon
           });
           tileset.clippingPlanes = new ClippingPlaneCollection();

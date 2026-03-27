@@ -5,15 +5,21 @@
  *
  * Docs: https://api-docs.iqair.com/
  *
- * On the free tier there is no "get all stations in bounding box" endpoint.
- * We query Portsmouth as a city and also try nearest_city for the island
- * centroid.  Results are returned as a single normalised station.
+ * Strategy:
+ *   1. Call /v2/stations to list all monitoring stations in Portsmouth.
+ *   2. Call /v2/station for each listed station (only subscribed ones succeed).
+ *   3. Fall back to /v2/city if the stations list is empty or all fail.
  */
 
 import axios from 'axios';
 import { getAqiCategory, getAqiColor } from './aqiHelpers';
 
 const BASE_URL = 'https://api.airvisual.com/v2';
+
+// IQAir city/state/country identifiers for Portsmouth
+const CITY = 'Portsmouth';
+const STATE = 'England';
+const COUNTRY = 'UK';
 
 // Approximate centroid of Portsea Island
 const PORTSEA_LAT = 50.806;
@@ -22,6 +28,11 @@ const PORTSEA_LNG = -1.070;
 // ---------------------------------------------------------------------------
 // Raw API types
 // ---------------------------------------------------------------------------
+
+interface IQAirStationsListResponse {
+  status: string;
+  data: Array<{ station: string }>;
+}
 
 interface IQAirPollutant {
   conc: number;
@@ -149,19 +160,87 @@ function normaliseCityResponse(raw: IQAirCityResponse): IQAirStation {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch city-level AQ data for Portsmouth from IQAir.
- * Returns `null` (does not throw) when the key is missing or the request fails,
- * so callers can degrade gracefully.
+ * List all monitoring station names available in Portsmouth from IQAir.
  */
-export async function fetchIQAirPortsmouth(
+async function fetchIQAirStationsList(apiKey: string): Promise<string[]> {
+  const url = `${BASE_URL}/stations?city=${CITY}&state=${STATE}&country=${COUNTRY}&key=${apiKey}`;
+  const response = await axios.get<IQAirStationsListResponse>(url, { timeout: 10_000 });
+
+  console.log(`[iqair] stations list response — status: "${response.data.status}"`);
+
+  if (response.data.status !== 'success') {
+    console.warn(`[iqair] stations list error:`, JSON.stringify(response.data).slice(0, 300));
+    throw new Error(`IQAir stations list returned status: ${response.data.status}`);
+  }
+
+  const names = (response.data.data ?? []).map((s) => s.station);
+  console.log(`[iqair] stations list — ${names.length} station(s): ${names.join(', ')}`);
+  return names;
+}
+
+/**
+ * Fetch AQ data for a specific monitoring station in Portsmouth.
+ * Returns null (does not throw) if the station is not subscribed or fails.
+ */
+async function fetchIQAirStation(
+  stationName: string,
   apiKey: string,
 ): Promise<IQAirStation | null> {
-  const url =
-    `${BASE_URL}/city?city=Portsmouth&state=England&country=UK&key=${apiKey}`;
-
+  const encoded = encodeURIComponent(stationName);
+  const url = `${BASE_URL}/station?station=${encoded}&city=${CITY}&state=${STATE}&country=${COUNTRY}&key=${apiKey}`;
   const response = await axios.get<IQAirCityResponse>(url, { timeout: 10_000 });
 
-  console.log(`[iqair] city response — status: "${response.data.status}"`);
+  if (response.data.status !== 'success') {
+    console.warn(`[iqair] station "${stationName}" error: ${response.data.status}`);
+    return null;
+  }
+
+  const { data } = response.data;
+  const pollution = data.current.pollution;
+  console.log(`[iqair] station "${stationName}" — coords: [${data.location.coordinates}]  AQI(us) ${pollution.aqius}  main: ${pollution.mainus}  ts: ${pollution.ts}`);
+
+  // Reuse normaliseCityResponse — the response shape is identical
+  return {
+    ...normaliseCityResponse(response.data),
+    // Override id/name to use station name rather than city name
+    id: `iqair-${stationName.toLowerCase().replace(/\s+/g, '-')}`,
+    name: stationName,
+  };
+}
+
+/**
+ * Fetch data for all subscribed IQAir monitoring stations in Portsmouth.
+ * Falls back to city-level data if the stations list is empty or all fail.
+ */
+export async function fetchAllIQAirPortsmouthStations(
+  apiKey: string,
+): Promise<IQAirStation[]> {
+  // 1. Get the list of stations
+  let stationNames: string[] = [];
+  try {
+    stationNames = await fetchIQAirStationsList(apiKey);
+  } catch (err) {
+    console.warn(`[iqair] Could not list stations, falling back to city endpoint: ${(err as Error).message}`);
+  }
+
+  // 2. Fetch each station (only subscribed ones will succeed)
+  if (stationNames.length > 0) {
+    const results = await Promise.all(
+      stationNames.map((name) => fetchIQAirStation(name, apiKey).catch(() => null)),
+    );
+    const stations = results.filter((s): s is IQAirStation => s !== null);
+    if (stations.length > 0) {
+      console.log(`[iqair] fetchAllIQAirPortsmouthStations — ${stations.length}/${stationNames.length} station(s) succeeded`);
+      return stations;
+    }
+    console.warn('[iqair] All station fetches failed — falling back to city endpoint');
+  }
+
+  // 3. Fallback: city-level data
+  const url = `${BASE_URL}/city?city=${CITY}&state=${STATE}&country=${COUNTRY}&key=${apiKey}`;
+  const response = await axios.get<IQAirCityResponse>(url, { timeout: 10_000 });
+
+  console.log(`[iqair] city fallback response — status: "${response.data.status}"`);
 
   if (response.data.status !== 'success') {
     console.warn(`[iqair] city API error payload:`, JSON.stringify(response.data).slice(0, 300));
@@ -169,11 +248,8 @@ export async function fetchIQAirPortsmouth(
   }
 
   const { data } = response.data;
-  console.log(`[iqair] city data — "${data.city}, ${data.state}, ${data.country}"  coords: [${data.location.coordinates}]`);
-  console.log(`  pollution: AQI(us) ${data.current.pollution.aqius}  main: ${data.current.pollution.mainus}  ts: ${data.current.pollution.ts}`);
-  console.log(`  weather: temp ${data.current.weather.tp}°C  humidity ${data.current.weather.hu}%  wind ${data.current.weather.ws} m/s @ ${data.current.weather.wd}°`);
-
-  return normaliseCityResponse(response.data);
+  console.log(`[iqair] city fallback — "${data.city}, ${data.state}"  AQI(us) ${data.current.pollution.aqius}`);
+  return [normaliseCityResponse(response.data)];
 }
 
 /**
@@ -183,9 +259,7 @@ export async function fetchIQAirPortsmouth(
 export async function fetchIQAirNearestCity(
   apiKey: string,
 ): Promise<IQAirStation | null> {
-  const url =
-    `${BASE_URL}/nearest_city?lat=${PORTSEA_LAT}&lon=${PORTSEA_LNG}&key=${apiKey}`;
-
+  const url = `${BASE_URL}/nearest_city?lat=${PORTSEA_LAT}&lon=${PORTSEA_LNG}&key=${apiKey}`;
   const response = await axios.get<IQAirCityResponse>(url, { timeout: 10_000 });
 
   console.log(`[iqair] nearest_city response — status: "${response.data.status}"`);
