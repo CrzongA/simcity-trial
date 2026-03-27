@@ -111,11 +111,11 @@ export const SeaLevelChart: React.FC = () => {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <span style={{ color: '#fff', fontSize: '14px', fontWeight: 600, letterSpacing: '0.5px' }}>SEA LEVEL PROJECTION</span>
-        <span style={{ color: '#00ffcc', fontSize: '18px', fontWeight: 700 }}>{selectedYear}</span>
+        <span style={{ color: '#fff', fontSize: '15px', fontWeight: 600, letterSpacing: '0.5px' }}>SEA LEVEL PROJECTION</span>
+        <span style={{ color: '#00ffcc', fontSize: '19px', fontWeight: 700 }}>{selectedYear}</span>
       </div>
 
-      <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '16px', lineHeight: 1.4 }}>
+      <div style={{ color: '#aaa', fontSize: '12px', marginBottom: '16px', lineHeight: 1.4 }}>
         Mean Sea Level relative to datum. Drag the vertical line to simulate conditions from 1960 to 2160.
       </div>
 
@@ -137,14 +137,14 @@ export const SeaLevelChart: React.FC = () => {
               return (
                 <g key={`ygrid-${i}`}>
                   <line x1={0} y1={yPos} x2={innerWidth} y2={yPos} stroke="rgba(255,255,255,0.05)" />
-                  <text x={-8} y={yPos + 4} fill="#666" fontSize="10px" textAnchor="end">{yVal.toFixed(1)}m</text>
+                  <text x={-8} y={yPos + 4} fill="#666" fontSize="11px" textAnchor="end">{yVal.toFixed(1)}m</text>
                 </g>
               );
             })}
 
             {/* X axis labels */}
             {[1960, 2000, 2050, 2100, 2150].map((xVal) => (
-              <text key={`xgrid-${xVal}`} x={getX(xVal)} y={innerHeight + 16} fill="#666" fontSize="10px" textAnchor="middle">
+              <text key={`xgrid-${xVal}`} x={getX(xVal)} y={innerHeight + 16} fill="#666" fontSize="11px" textAnchor="middle">
                 {xVal}
               </text>
             ))}

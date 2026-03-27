@@ -23,7 +23,7 @@ interface ModelDesignMenuProps {
 }
 
 const LABEL: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '12px',
   color: 'rgba(255,255,255,0.5)',
   letterSpacing: '0.05em',
   textTransform: 'uppercase',
@@ -37,7 +37,7 @@ const modeBtn = (active: boolean): React.CSSProperties => ({
   background: active ? 'rgba(0, 255, 204, 0.15)' : 'transparent',
   border: active ? '1px solid #00ffcc' : '1px solid rgba(255,255,255,0.2)',
   color: active ? '#00ffcc' : '#aaa',
-  fontSize: '11px',
+  fontSize: '12px',
   cursor: 'pointer',
   borderRadius: '2px',
   fontFamily: 'inherit',
@@ -143,7 +143,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
     }}>
       {/* Header */}
       <span style={{
-        fontSize: '11px',
+        fontSize: '12px',
         fontWeight: 700,
         letterSpacing: '1px',
         color: 'rgba(255,255,255,0.5)',
@@ -203,7 +203,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                 }}
               >
                 <span style={{
-                  fontSize: '12px',
+                  fontSize: '13px',
                   flex: 1,
                   color: isSelected ? '#00ffcc' : '#ccc',
                   overflow: 'hidden',
@@ -220,7 +220,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                     cursor: 'pointer',
                     color: model.visible ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
                     padding: '2px 4px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     lineHeight: 1,
                   }}
                   title={model.visible ? 'Hide' : 'Show'}
@@ -235,7 +235,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                     cursor: 'pointer',
                     color: 'rgba(255,80,80,0.6)',
                     padding: '2px 4px',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     lineHeight: 1,
                   }}
                   title="Remove"
@@ -282,11 +282,11 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                 ].map(({ color, label }) => (
                   <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>{label}</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{label}</span>
                   </div>
                 ))}
               </div>
-              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, display: 'block' }}>
+              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5, display: 'block' }}>
                 Drag the coloured handles in the scene to reposition the model.
               </span>
             </div>
@@ -303,7 +303,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                 <div key={key}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={LABEL}>{label}</span>
-                    <span style={{ fontSize: '11px', color: '#00ffcc' }}>
+                    <span style={{ fontSize: '12px', color: '#00ffcc' }}>
                       {Math.round(selectedModel[key])}{unit}
                     </span>
                   </div>
@@ -352,7 +352,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
                   background: 'none',
                   border: '1px solid rgba(255,255,255,0.15)',
                   color: 'rgba(255,255,255,0.4)',
-                  fontSize: '10px',
+                  fontSize: '11px',
                   padding: '3px 8px',
                   cursor: 'pointer',
                   borderRadius: '2px',
@@ -374,7 +374,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
               background: 'transparent',
               border: '1px solid rgba(255,255,255,0.15)',
               color: 'rgba(255,255,255,0.5)',
-              fontSize: '11px',
+              fontSize: '12px',
               cursor: 'pointer',
               borderRadius: '2px',
               fontFamily: 'inherit',
@@ -390,7 +390,7 @@ export const ModelDesignMenu: React.FC<ModelDesignMenuProps> = ({ viewerRef }) =
       {/* Empty state */}
       {models.length === 0 && (
         <span style={{
-          fontSize: '11px',
+          fontSize: '12px',
           color: 'rgba(255,255,255,0.25)',
           textAlign: 'center',
           lineHeight: 1.7,

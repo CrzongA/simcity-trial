@@ -10,8 +10,9 @@ export const MissileMenu: React.FC = () => {
     <div
       style={{
         position: 'absolute',
-        top: '20px',
+        top: '50%',
         left: '20px',
+        transform: 'translateY(-50%)',
         width: '320px',
         zIndex: 50,
         background: '#101217',
@@ -27,13 +28,13 @@ export const MissileMenu: React.FC = () => {
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 60, 0, 0.2)', paddingBottom: '12px' }}>
-        <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', color: '#ff3c00' }}>
+        <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', color: '#ff3c00' }}>
           Strike Simulation
         </h2>
         <div style={{ width: '8px', height: '8px', background: '#ff3c00', borderRadius: '50%', boxShadow: '0 0 10px #ff3c00', animation: 'pulse 2s infinite' }} />
       </div>
 
-      <p style={{ margin: 0, fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
+      <p style={{ margin: 0, fontSize: '13px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 }}>
         Select payload type. Click on the map to mark ground zero. Multiple strikes allowed.
       </p>
 
@@ -61,13 +62,13 @@ export const MissileMenu: React.FC = () => {
                 gap: '8px'
               }}
             >
-              <span style={{ fontSize: '14px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#ff3c00' : '#ccc' }}>
+              <span style={{ fontSize: '15px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#ff3c00' : '#ccc' }}>
                 {weapon.name}
               </span>
               
                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {weapon.tiers.map((tier, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
                     <span>{tier.name}</span>
                     <span>{tier.radius >= 1000 ? `${(tier.radius/1000).toFixed(1)}km` : `${tier.radius}m`}</span>
                   </div>

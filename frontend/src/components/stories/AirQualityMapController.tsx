@@ -263,7 +263,7 @@ export const AirQualityMapController: React.FC<Props> = ({ viewerRef }) => {
     <div style={{
       position: 'absolute', top: 0, left: 0,
       width: '100%', height: '100%',
-      pointerEvents: 'none', zIndex: 100, overflow: 'hidden',
+      pointerEvents: 'none', zIndex: 5, overflow: 'hidden',
     }}>
       {/* Leader lines drawn behind the billboard cards */}
       <svg

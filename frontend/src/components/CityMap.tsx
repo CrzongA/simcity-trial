@@ -335,8 +335,8 @@ const CityMap = () => {
     let postRenderListener: () => void;
 
     const getAutoSse = (heightM: number): number => {
-      if (heightM < 3000) return 16;
-      if (heightM < 6000) return 10;
+      if (heightM < 3000) return 32;
+      if (heightM < 6000) return 16;
       return 2;
     };
 
@@ -684,6 +684,8 @@ const CityMap = () => {
         </>
       )}
 
+      {activeStory === 'air-quality' && <AirQualityMenu />}
+
       <AirQualityMapController viewerRef={viewerRef} />
 
       <BaseMapControls viewerRef={viewerRef} />
@@ -712,7 +714,6 @@ const CityMap = () => {
           viewerRef={viewerRef}
         />
         {activeStory === 'drone-flying' && <DroneSettings />}
-        {activeStory === 'air-quality' && <AirQualityMenu />}
       </div>
 
       {/* --- Overlay UI --- */}

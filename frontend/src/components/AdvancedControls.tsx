@@ -262,7 +262,7 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
             />
             <div style={{ fontSize: '10px', color: '#888', fontStyle: 'italic' }}>
               {autoSse
-                ? 'Auto: 16 (0–3km) · 10 (3–6km) · 2 (6km+)'
+                ? 'Auto: 32 (0–3km) · 16 (3–6km) · 2 (6km+)'
                 : 'Lower = Higher Detail (Fixes "Jagged" tiles)'}
             </div>
           </div>

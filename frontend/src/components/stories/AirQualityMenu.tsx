@@ -7,6 +7,11 @@ import {
 } from '../../store/airQualitySlice';
 
 const PANEL_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: 20,
+  transform: 'translateY(-50%)',
+  zIndex: 50,
   background: 'rgba(14, 16, 20, 0.92)',
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: '4px',
@@ -19,7 +24,7 @@ const PANEL_STYLE: React.CSSProperties = {
 };
 
 const SECTION_LABEL: React.CSSProperties = {
-  fontSize: '9px',
+  fontSize: '10px',
   fontWeight: 700,
   letterSpacing: '1.2px',
   textTransform: 'uppercase',
@@ -78,10 +83,10 @@ export const AirQualityMenu: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <div>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
+          <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>
             Air Quality
           </div>
-          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '1px' }}>
+          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', marginTop: '1px' }}>
             {stations.length} station{stations.length !== 1 ? 's' : ''} · updated {lastUpdated}
           </div>
         </div>
@@ -107,7 +112,7 @@ export const AirQualityMenu: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div style={{ fontSize: '11px', color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: '3px', padding: '5px 8px', marginBottom: '10px' }}>
+        <div style={{ fontSize: '12px', color: '#ff6b6b', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: '3px', padding: '5px 8px', marginBottom: '10px' }}>
           {error}
         </div>
       )}
@@ -126,7 +131,7 @@ export const AirQualityMenu: React.FC = () => {
                 color: activePollutant === id ? '#00ffcc' : '#888',
                 borderRadius: '2px',
                 padding: '3px 8px',
-                fontSize: '11px',
+                fontSize: '12px',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'all 0.15s',
@@ -143,11 +148,11 @@ export const AirQualityMenu: React.FC = () => {
       <div style={{ marginBottom: '10px' }}>
         <div style={SECTION_LABEL}>Layers</div>
         <div style={ROW}>
-          <span style={{ fontSize: '12px' }}>Heatmap</span>
+          <span style={{ fontSize: '13px' }}>Heatmap</span>
           <Toggle value={showHeatmap} onChange={v => dispatch(setShowHeatmap(v))} />
         </div>
         <div style={ROW}>
-          <span style={{ fontSize: '12px' }}>Billboards</span>
+          <span style={{ fontSize: '13px' }}>Billboards</span>
           <Toggle value={showBillboards} onChange={v => dispatch(setShowBillboards(v))} />
         </div>
       </div>
@@ -167,7 +172,7 @@ export const AirQualityMenu: React.FC = () => {
                 color: refreshInterval === v ? '#00ffcc' : '#888',
                 borderRadius: '2px',
                 padding: '4px 0',
-                fontSize: '11px',
+                fontSize: '12px',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'all 0.15s',
@@ -185,7 +190,7 @@ export const AirQualityMenu: React.FC = () => {
           <div style={SECTION_LABEL}>Stations</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '140px', overflowY: 'auto' }}>
             {stations.map(s => (
-              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
+              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                 <span style={{ color: '#aaa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
                   {s.name}
                 </span>
@@ -193,7 +198,7 @@ export const AirQualityMenu: React.FC = () => {
                   background: s.aqiColor,
                   color: '#000',
                   fontWeight: 700,
-                  fontSize: '10px',
+                  fontSize: '11px',
                   padding: '1px 5px',
                   borderRadius: '2px',
                   minWidth: '28px',
@@ -217,8 +222,8 @@ export const AirQualityMenu: React.FC = () => {
           ))}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px' }}>
-          <span style={{ fontSize: '9px', color: '#555' }}>Good</span>
-          <span style={{ fontSize: '9px', color: '#555' }}>Hazardous</span>
+          <span style={{ fontSize: '10px', color: '#555' }}>Good</span>
+          <span style={{ fontSize: '10px', color: '#555' }}>Hazardous</span>
         </div>
       </div>
     </div>

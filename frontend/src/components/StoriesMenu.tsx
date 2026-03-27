@@ -42,6 +42,7 @@ export const StoriesMenu: React.FC = () => {
     }}>
       {/* First-visit hint */}
       <div style={{
+        display: showHint ? 'block' : 'none',
         opacity: showHint ? 1 : 0,
         transform: showHint ? 'translateY(0)' : 'translateY(6px)',
         transition: 'opacity 0.6s ease, transform 0.6s ease',
