@@ -1,35 +1,55 @@
 /**
  * Geographic utilities: point-in-polygon (ray casting) and Portsea Island boundary.
+ *
+ * The polygon is loaded at startup from data/portsmouth_geojson.json at the
+ * monorepo root, so both backend and frontend share a single source of truth.
  */
+
+import * as fs from 'fs';
+import * as path from 'path';
 
 /** [lng, lat] tuple — GeoJSON coordinate order */
 export type LngLat = [number, number];
 
+// ---------------------------------------------------------------------------
+// Load GeoJSON from monorepo root data directory
+// ---------------------------------------------------------------------------
+
+interface MultiPolygonGeoJSON {
+  type: 'MultiPolygon';
+  /** [polygon][ring][point] = [lng, lat] */
+  coordinates: number[][][][];
+}
+
+const geojsonPath = path.resolve(__dirname, '../../../data/portsmouth_geojson.json');
+const portsmouthGeoJSON: MultiPolygonGeoJSON = JSON.parse(
+  fs.readFileSync(geojsonPath, 'utf-8'),
+);
+
+console.log(
+  `[geo] Loaded portsmouth_geojson.json — ${portsmouthGeoJSON.coordinates.length} polygon(s), ` +
+  `largest outer ring: ${portsmouthGeoJSON.coordinates.reduce((n, p) => Math.max(n, p[0].length), 0)} vertices`,
+);
+
+// ---------------------------------------------------------------------------
+// Derived polygon data
+// ---------------------------------------------------------------------------
+
 /**
- * Portsea Island polygon vertices in [lng, lat] order.
- * Closing vertex equals opening vertex.
+ * Outer ring of the largest polygon (main Portsea Island).
+ * Used for single-polygon operations (legacy / BBOX queries).
  */
-export const PORTSEA_POLYGON: LngLat[] = [
-  [-1.0427596626152251, 50.830958237034054],
-  [-1.0604743796138791, 50.83584374006128],
-  [-1.0776044133194205, 50.837192014143255],
-  [-1.0875733159936942, 50.827411088478044],
-  [-1.0929942237834496, 50.829673878802794],
-  [-1.101024659954561,  50.82728764891729],
-  [-1.0986043596175534, 50.82092912675901],
-  [-1.1040285083727213, 50.81243061496508],
-  [-1.1078999988087617, 50.8077212014195],
-  [-1.1127339276309556, 50.807476668237314],
-  [-1.1122566693125293, 50.79811717595592],
-  [-1.109653123524879,  50.79013353733296],
-  [-1.1022996381986445, 50.785291871069774],
-  [-1.091646333565933,  50.77778524559278],
-  [-1.0864481981128051, 50.77660843328354],
-  [-1.07541055672948,   50.77717665266604],
-  [-1.0268733632743476, 50.7866545480594],
-  [-1.0285613163973721, 50.79584699688698],
-  [-1.0427596626152251, 50.830958237034054],
-];
+export const PORTSEA_POLYGON: LngLat[] = portsmouthGeoJSON.coordinates
+  .reduce((largest, current) => current[0].length > largest[0].length ? current : largest)
+  [0] as LngLat[];
+
+/**
+ * Outer ring of every polygon in the MultiPolygon.
+ * Used when checking membership across all Portsmouth islands.
+ */
+const PORTSEA_RINGS: LngLat[][] = portsmouthGeoJSON.coordinates.map(
+  polygon => polygon[0] as LngLat[],
+);
 
 /**
  * Bounding box for API queries — SW and NE corners.
@@ -38,6 +58,10 @@ export const PORTSEA_BBOX = {
   sw: { lat: 50.776, lng: -1.115 },
   ne: { lat: 50.838, lng: -1.026 },
 } as const;
+
+// ---------------------------------------------------------------------------
+// Algorithms
+// ---------------------------------------------------------------------------
 
 /**
  * Ray-casting point-in-polygon test.
@@ -70,8 +94,9 @@ export function pointInPolygon(
 }
 
 /**
- * Returns true if the given lat/lng lies within the Portsea Island polygon.
+ * Returns true if the given lat/lng lies within any polygon of the
+ * Portsmouth MultiPolygon boundary (covers all islands in the dataset).
  */
 export function isWithinPortseaIsland(lat: number, lng: number): boolean {
-  return pointInPolygon(lng, lat, PORTSEA_POLYGON);
+  return PORTSEA_RINGS.some(ring => pointInPolygon(lng, lat, ring));
 }
