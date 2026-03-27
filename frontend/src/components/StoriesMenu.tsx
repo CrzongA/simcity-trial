@@ -7,6 +7,7 @@ const STORIES = [
   { id: 'missile-strike', label: 'Missile Strike', emoji: '🚀' },
   { id: 'drone-flying', label: 'Drone FPV', emoji: '🚁' },
   { id: 'model-design', label: 'Design Portsmouth', emoji: '🏗️' },
+  { id: 'air-quality', label: 'Air Quality', emoji: '🌬️' },
 ];
 
 const HINT_KEY = 'cityintime_stories_hint_shown';

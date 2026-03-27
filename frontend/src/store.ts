@@ -6,6 +6,7 @@ import missileStrikeReducer from './store/missileStrikeSlice';
 import uiReducer from './store/uiSlice';
 import droneReducer from './store/droneSlice';
 import modelDesignReducer from './store/modelDesignSlice';
+import airQualityReducer from './store/airQualitySlice';
 
 export const store = configureStore({
   reducer: {
@@ -15,6 +16,7 @@ export const store = configureStore({
     ui: uiReducer,
     drone: droneReducer,
     modelDesign: modelDesignReducer,
+    airQuality: airQualityReducer,
   },
 });
 

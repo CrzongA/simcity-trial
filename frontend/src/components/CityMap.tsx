@@ -19,6 +19,8 @@ import { DroneHUD } from './stories/DroneHUD';
 import { DroneSettings } from './stories/DroneSettings';
 import { ModelDesignMenu } from './stories/ModelDesignMenu';
 import { ModelDesignMapController } from './stories/ModelDesignMapController';
+import { AirQualityMenu } from './stories/AirQualityMenu';
+import { AirQualityMapController } from './stories/AirQualityMapController';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
 import CityTitleOverlay from './CityTitleOverlay';
@@ -685,6 +687,8 @@ const CityMap = () => {
         </>
       )}
 
+      <AirQualityMapController viewerRef={viewerRef} />
+
       <BaseMapControls viewerRef={viewerRef} />
 
       <div style={{
@@ -711,6 +715,7 @@ const CityMap = () => {
           viewerRef={viewerRef}
         />
         {activeStory === 'drone-flying' && <DroneSettings />}
+        {activeStory === 'air-quality' && <AirQualityMenu />}
       </div>
 
       {/* --- Overlay UI --- */}
