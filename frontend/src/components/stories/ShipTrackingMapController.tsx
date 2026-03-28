@@ -267,14 +267,12 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
     const onClick = (e: any) => {
       const picked = viewer.scene.pick(e.position);
       const entityId: string | undefined = picked?.id?.id;
-      console.log('[shipClick] picked entity id:', entityId);
       if (!entityId) { dispatch(setSelectedMmsi(null)); return; }
 
       if (entityId.startsWith('ship-')) {
         // ID format: ship-<mmsi>-<part>  (mmsi is always a 9-digit number)
         const match = entityId.match(/^ship-(\d+)-/);
         const mmsi = match?.[1] ?? null;
-        console.log('[shipClick] extracted mmsi:', mmsi);
         if (mmsi) {
           dispatch(setSelectedMmsi(mmsi === selectedRef.current ? null : mmsi));
           return;

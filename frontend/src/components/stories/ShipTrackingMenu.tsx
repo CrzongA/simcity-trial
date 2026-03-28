@@ -70,7 +70,6 @@ export const ShipTrackingMenu: React.FC = () => {
   ];
 
   const selectedVessel = selectedMmsi ? vessels.find(v => String(v.mmsi) === String(selectedMmsi)) : null;
-  if (selectedMmsi) console.log('[shipMenu] selectedMmsi:', selectedMmsi, '→ found:', !!selectedVessel, 'vessels:', vessels.map(v => v.mmsi));
 
   return (
     <div style={{
