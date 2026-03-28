@@ -24,8 +24,10 @@ import {
   requestCount,
 } from '../services/diskCache';
 
-// Disk-backed caches (persist across restarts)
-const stationsCache      = new DiskCache<NormalisedStation[]>('air-stations');
+// Disk-backed caches (persist across restarts).
+// stationsCache is keyed per-station (by id) so a smaller API response
+// does not evict stations returned by a previous, richer response.
+const stationsCache      = new DiskCache<NormalisedStation>('air-stations');
 const stationDetailCache = new DiskCache<StationDetailResponse>('air-station-detail');
 
 const router = Router();
@@ -74,8 +76,6 @@ interface StationDetailResponse extends NormalisedStation {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const STATIONS_CACHE_KEY = 'stations-list';
 
 /**
  * Haversine distance in km between two lat/lng pairs.
@@ -309,21 +309,32 @@ async function fetchLiveStations(): Promise<{
 router.get('/stations', async (_req: Request, res: Response): Promise<void> => {
   trackRequest('air:stations');
 
+  // Helpers: collect all fresh / all (stale+fresh) stations from per-entity cache
+  const getFreshStations = (): NormalisedStation[] =>
+    stationsCache.keys()
+      .map(k => stationsCache.getFresh(k))
+      .filter((s): s is NormalisedStation => s !== undefined);
+
+  const getAllCachedStations = (): DiskCacheEntry<NormalisedStation>[] =>
+    stationsCache.keys()
+      .map(k => stationsCache.get(k))
+      .filter((e): e is DiskCacheEntry<NormalisedStation> => e !== undefined);
+
   // 1. Try fresh cache (memory-backed, persisted to disk)
-  const fresh = stationsCache.getFresh(STATIONS_CACHE_KEY);
-  if (fresh) {
-    console.log(`[airQuality] /stations — cache HIT (${fresh.length} station(s))`);
-    res.json({ stations: fresh, fetchedAt: new Date().toISOString(), sources: [...new Set(fresh.map(s => s.source))] } satisfies StationsResponse);
+  const freshStations = getFreshStations();
+  if (freshStations.length > 0) {
+    console.log(`[airQuality] /stations — cache HIT (${freshStations.length} station(s))`);
+    res.json({ stations: freshStations, fetchedAt: new Date().toISOString(), sources: [...new Set(freshStations.map(s => s.source))] } satisfies StationsResponse);
     return;
   }
 
   // Helper: try to respond with stale disk cache; returns true if served
   const serveStale = (reason: string): boolean => {
-    const staleEntry: DiskCacheEntry<NormalisedStation[]> | undefined = stationsCache.get(STATIONS_CACHE_KEY);
-    if (!staleEntry) return false;
-    const ageMin = Math.round((Date.now() - staleEntry.storedAt) / 60_000);
-    console.warn(`[airQuality] /stations — ${reason}, returning disk cache (${ageMin} min old)`);
-    const stale = staleEntry.value.map(s => ({ ...s, isStale: true }));
+    const entries = getAllCachedStations();
+    if (entries.length === 0) return false;
+    const oldestAgeMin = Math.round(Math.max(...entries.map(e => Date.now() - e.storedAt)) / 60_000);
+    console.warn(`[airQuality] /stations — ${reason}, returning disk cache (oldest: ${oldestAgeMin} min)`);
+    const stale = entries.map(e => ({ ...e.value, isStale: true }));
     res.json({ stations: stale, fetchedAt: new Date().toISOString(), sources: [...new Set(stale.map(s => s.source))], isStale: true, error: `${reason}; returning cached data` } satisfies StationsResponse);
     return true;
   };
@@ -344,7 +355,11 @@ router.get('/stations', async (_req: Request, res: Response): Promise<void> => {
 
   try {
     ({ stations, sources } = await fetchLiveStations());
-    stationsCache.set(STATIONS_CACHE_KEY, stations, STATIONS_TTL_MS);
+    // Store each station individually — a smaller response won't evict stations
+    // returned by a previous, richer response; each entry expires on its own TTL.
+    for (const station of stations) {
+      stationsCache.set(station.id, station, STATIONS_TTL_MS);
+    }
     console.log(`[airQuality] /stations — cached ${stations.length} station(s) for ${STATIONS_TTL_MS / 60000} min`);
   } catch (err) {
     console.error('[airQuality] Live fetch error:', err);

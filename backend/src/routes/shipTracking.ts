@@ -11,7 +11,7 @@
 
 import { Router, Request, Response } from 'express';
 import * as ais from '../services/aisstream';
-import * as vf  from '../services/vesselfinder';
+import * as vf from '../services/vesselfinder';
 import * as mst from '../services/myshiptracking';
 import { type NormalisedVessel, type NormalisedVesselDetail } from '../services/shipTypes';
 import { DiskCache, DiskCacheEntry, trackRequest, isRateLimited, requestCount } from '../services/diskCache';
@@ -22,13 +22,13 @@ const router = Router();
 // Cache instances
 // ---------------------------------------------------------------------------
 
-const VESSELS_TTL_MS      = 60 * 1000;       // 60 seconds
+const VESSELS_TTL_MS = 120 * 1000;       // 120 seconds
 const VESSEL_DETAIL_TTL_MS = 5 * 60 * 1000;  // 5 minutes
 
-const vesselsCache      = new DiskCache<NormalisedVessel[]>('ship-vessels');
+// Per-vessel cache (key = MMSI) — new responses only update vessels present in
+// the latest batch, leaving previously seen vessels intact until their TTL expires.
+const vesselsCache = new DiskCache<NormalisedVessel>('ship-vessels');
 const vesselDetailCache = new DiskCache<NormalisedVesselDetail>('ship-vessel-detail');
-
-const VESSELS_CACHE_KEY = 'vessels-list';
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -49,8 +49,8 @@ interface VesselsResponse {
 
 /** Try AISStream → VesselFinder → MyShipTracking. */
 async function fetchVesselsWithFallback(): Promise<{ vessels: NormalisedVessel[]; provider: string }> {
-  const aisKey = process.env['AISSTREAM_API_KEY']      ?? '';
-  const vfKey  = process.env['VESSELFINDER_API_KEY']   ?? '';
+  const aisKey = process.env['AISSTREAM_API_KEY'] ?? '';
+  const vfKey = process.env['VESSELFINDER_API_KEY'] ?? '';
   const mstKey = process.env['MYSHIPTRACKING_API_KEY'] ?? '';
 
   // Primary: AISStream (in-memory — no HTTP call)
@@ -96,8 +96,8 @@ async function fetchVesselsWithFallback(): Promise<{ vessels: NormalisedVessel[]
 
 /** Try AISStream → VesselFinder → MyShipTracking. */
 async function fetchDetailWithFallback(mmsi: string): Promise<{ detail: NormalisedVesselDetail; provider: string }> {
-  const aisKey = process.env['AISSTREAM_API_KEY']      ?? '';
-  const vfKey  = process.env['VESSELFINDER_API_KEY']   ?? '';
+  const aisKey = process.env['AISSTREAM_API_KEY'] ?? '';
+  const vfKey = process.env['VESSELFINDER_API_KEY'] ?? '';
   const mstKey = process.env['MYSHIPTRACKING_API_KEY'] ?? '';
 
   // Primary: AISStream (in-memory)
@@ -132,12 +132,12 @@ async function fetchDetailWithFallback(mmsi: string): Promise<{ detail: Normalis
 router.get('/vessels', async (_req: Request, res: Response): Promise<void> => {
   trackRequest('ship:vessels');
 
-  const aisKey = process.env['AISSTREAM_API_KEY']      ?? '';
-  const vfKey  = process.env['VESSELFINDER_API_KEY']   ?? '';
+  const aisKey = process.env['AISSTREAM_API_KEY'] ?? '';
+  const vfKey = process.env['VESSELFINDER_API_KEY'] ?? '';
   const mstKey = process.env['MYSHIPTRACKING_API_KEY'] ?? '';
   const hasAnyKey =
     (aisKey && aisKey !== 'your_key_here') ||
-    (vfKey  && vfKey  !== 'your_key_here') ||
+    (vfKey && vfKey !== 'your_key_here') ||
     (mstKey && mstKey !== 'your_key_here');
 
   if (!hasAnyKey) {
@@ -149,21 +149,32 @@ router.get('/vessels', async (_req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  // Helpers: collect all fresh / all (stale+fresh) vessels from per-entity cache
+  const getFreshVessels = (): NormalisedVessel[] =>
+    vesselsCache.keys()
+      .map(k => vesselsCache.getFresh(k))
+      .filter((v): v is NormalisedVessel => v !== undefined);
+
+  const getAllCachedVessels = (): DiskCacheEntry<NormalisedVessel>[] =>
+    vesselsCache.keys()
+      .map(k => vesselsCache.get(k))
+      .filter((e): e is DiskCacheEntry<NormalisedVessel> => e !== undefined);
+
   // 1. Fresh cache hit
-  const fresh = vesselsCache.getFresh(VESSELS_CACHE_KEY);
-  if (fresh) {
-    console.log(`[shipTracking] /vessels — cache HIT (${fresh.length} vessel(s))`);
-    res.json({ vessels: fresh, fetchedAt: new Date().toISOString(), count: fresh.length } satisfies VesselsResponse);
+  const freshVessels = getFreshVessels();
+  if (freshVessels.length > 0) {
+    console.log(`[shipTracking] /vessels — cache HIT (${freshVessels.length} vessel(s))`);
+    res.json({ vessels: freshVessels, fetchedAt: new Date().toISOString(), count: freshVessels.length } satisfies VesselsResponse);
     return;
   }
 
   // Helper: serve stale disk cache; returns true if served
   const serveStale = (reason: string): boolean => {
-    const staleEntry: DiskCacheEntry<NormalisedVessel[]> | undefined = vesselsCache.get(VESSELS_CACHE_KEY);
-    if (!staleEntry) return false;
-    const ageS = Math.round((Date.now() - staleEntry.storedAt) / 1000);
-    console.warn(`[shipTracking] /vessels — ${reason}, returning disk cache (${ageS}s old)`);
-    const stale = staleEntry.value.map(v => ({ ...v, isStale: true }));
+    const entries = getAllCachedVessels();
+    if (entries.length === 0) return false;
+    const oldestAgeS = Math.round(Math.max(...entries.map(e => Date.now() - e.storedAt)) / 1000);
+    console.warn(`[shipTracking] /vessels — ${reason}, returning disk cache (oldest: ${oldestAgeS}s)`);
+    const stale = entries.map(e => ({ ...e.value, isStale: true }));
     res.json({ vessels: stale, fetchedAt: new Date().toISOString(), count: stale.length, isStale: true, error: `${reason}; returning cached data` } satisfies VesselsResponse);
     return true;
   };
@@ -181,13 +192,12 @@ router.get('/vessels', async (_req: Request, res: Response): Promise<void> => {
   // 3. Live fetch (primary → backup)
   try {
     const { vessels, provider } = await fetchVesselsWithFallback();
-    if (vessels.length > 0) {
-      vesselsCache.set(VESSELS_CACHE_KEY, vessels, VESSELS_TTL_MS);
+    // Store each vessel individually — a smaller response won't evict vessels
+    // seen in a previous batch; each entry expires on its own TTL.
+    for (const vessel of vessels) {
+      vesselsCache.set(vessel.mmsi, vessel, VESSELS_TTL_MS);
     }
     console.log(`[shipTracking] /vessels — ${vessels.length} vessel(s) via ${provider}${vessels.length > 0 ? `, cached for ${VESSELS_TTL_MS / 1000}s` : ' (not cached — empty)'}`);
-    vessels.forEach(v => {
-      console.log(`  → MMSI ${v.mmsi}  "${v.name}"  [${v.vesselType}]  lat ${v.lat.toFixed(4)} lon ${v.lon.toFixed(4)}  ${v.speed ?? '—'} kn  hdg ${v.course ?? '—'}°`);
-    });
     res.json({ vessels, fetchedAt: new Date().toISOString(), count: vessels.length, provider } satisfies VesselsResponse);
   } catch (err) {
     console.error('[shipTracking] Live fetch error:', err);
@@ -207,12 +217,12 @@ router.get('/vessel/:mmsi', async (req: Request, res: Response): Promise<void> =
     return;
   }
 
-  const aisKey = process.env['AISSTREAM_API_KEY']      ?? '';
-  const vfKey  = process.env['VESSELFINDER_API_KEY']   ?? '';
+  const aisKey = process.env['AISSTREAM_API_KEY'] ?? '';
+  const vfKey = process.env['VESSELFINDER_API_KEY'] ?? '';
   const mstKey = process.env['MYSHIPTRACKING_API_KEY'] ?? '';
   const hasAnyKey =
     (aisKey && aisKey !== 'your_key_here') ||
-    (vfKey  && vfKey  !== 'your_key_here') ||
+    (vfKey && vfKey !== 'your_key_here') ||
     (mstKey && mstKey !== 'your_key_here');
 
   if (!hasAnyKey) {

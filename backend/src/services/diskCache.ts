@@ -59,9 +59,10 @@ export class DiskCache<T> {
 
   /** Store value in memory and write it to disk. */
   set(key: string, value: T, ttlMs: number): void {
+    const k = String(key); // coerce — some API responses deliver numeric IDs at runtime
     const entry: DiskCacheEntry<T> = { value, storedAt: Date.now(), ttlMs };
-    this.mem.set(key, entry);
-    this.writeToDisk(key, entry);
+    this.mem.set(k, entry);
+    this.writeToDisk(k, entry);
   }
 
   /** Return the entry (fresh OR stale) if it exists; otherwise undefined. */
@@ -80,6 +81,11 @@ export class DiskCache<T> {
   /** True when an entry exists and is within its TTL. */
   isFresh(key: string): boolean {
     return this.getFresh(key) !== undefined;
+  }
+
+  /** All keys currently held in memory (fresh and stale). */
+  keys(): string[] {
+    return [...this.mem.keys()];
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
