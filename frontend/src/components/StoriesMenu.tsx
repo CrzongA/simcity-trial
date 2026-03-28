@@ -4,11 +4,12 @@ import { setActiveStory } from '../store/storySlice';
 
 const STORIES = [
   { id: 'sea-level-rise', label: 'Sea Level Rise', emoji: '🌊' },
-  { id: 'missile-strike', label: 'Missile Strike', emoji: '🚀' },
+  // { id: 'missile-strike', label: 'Missile Strike', emoji: '🚀' },
   { id: 'drone-flying', label: 'Drone FPV', emoji: '🚁' },
   { id: 'model-design', label: 'Design Portsmouth', emoji: '🏗️' },
   { id: 'air-quality', label: 'Air Quality', emoji: '🌬️' },
   { id: 'ship-tracking', label: 'Ship Tracking', emoji: '🚢' },
+  { id: 'community-reports', label: 'Community Reports', emoji: '🗑️' },
 ];
 
 const HINT_KEY = 'cityintime_stories_hint_shown';

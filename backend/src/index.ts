@@ -12,6 +12,7 @@ import cors from 'cors';
 
 import airQualityRouter from './routes/airQuality';
 import shipTrackingRouter from './routes/shipTracking';
+import communityReportsRouter from './routes/communityReports';
 import './services/aisstream';  // starts WebSocket connection on boot if AISSTREAM_API_KEY is set
 
 const app = express();
@@ -24,12 +25,12 @@ const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
 app.use(
   cors({
     origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-    methods: ['GET'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
 
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 // Request logger
 app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -51,6 +52,9 @@ app.use('/api/air-quality', airQualityRouter);
 
 // Ship tracking routes
 app.use('/api/ship-tracking', shipTrackingRouter);
+
+// Community reports routes
+app.use('/api/reports', communityReportsRouter);
 
 // 404 catch-all
 app.use((_req: Request, res: Response) => {

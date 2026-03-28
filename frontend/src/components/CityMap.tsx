@@ -23,6 +23,9 @@ import { AirQualityMenu } from './stories/AirQualityMenu';
 import { AirQualityMapController } from './stories/AirQualityMapController';
 import { ShipTrackingMenu } from './stories/ShipTrackingMenu';
 import { ShipTrackingMapController } from './stories/ShipTrackingMapController';
+import { CommunityReportMapController } from './stories/CommunityReportMapController';
+import { CommunityReportMenu } from './stories/CommunityReportMenu';
+import { CommunityReportForm } from './stories/CommunityReportForm';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
 import CityTitleOverlay from './CityTitleOverlay';
@@ -691,6 +694,15 @@ const CityMap = () => {
 
       <ShipTrackingMapController viewerRef={viewerRef} baseHeight={baseHeight} />
 
+      {activeStory === 'community-reports' && (
+        <>
+          <CommunityReportMenu />
+          <CommunityReportForm />
+        </>
+      )}
+
+      <CommunityReportMapController viewerRef={viewerRef} />
+
       <BaseMapControls viewerRef={viewerRef} />
 
       <div style={{
@@ -721,7 +733,7 @@ const CityMap = () => {
 
       {/* --- Overlay UI --- */}
       {/* Context Menu */}
-      <ContextMenuPopup contextMenu={contextMenu} handleShowDetails={handleShowDetails} />
+      <ContextMenuPopup contextMenu={contextMenu} handleShowDetails={handleShowDetails} setContextMenu={setContextMenu} />
 
       {/* Floating Detail Billboards */}
       <BillboardsOverlay
