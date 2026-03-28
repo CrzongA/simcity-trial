@@ -10,7 +10,7 @@
  * live external API calls and serve from this cache instead.
  */
 
-import * as fs   from 'fs';
+import * as fs from 'fs';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
@@ -18,13 +18,13 @@ import * as path from 'path';
 // ---------------------------------------------------------------------------
 
 export interface DiskCacheEntry<T> {
-  value:     T;
-  storedAt:  number; // Unix ms
-  ttlMs:     number;
+  value: T;
+  storedAt: number; // Unix ms
+  ttlMs: number;
 }
 
 interface CacheFile<T> {
-  key:   string;
+  key: string;
   entry: DiskCacheEntry<T>;
 }
 
@@ -92,7 +92,7 @@ export class DiskCache<T> {
   private loadAll(): void {
     try {
       const prefix = `${this.ns}__`;
-      const files  = fs.readdirSync(CACHE_DIR)
+      const files = fs.readdirSync(CACHE_DIR)
         .filter(f => f.startsWith(prefix) && f.endsWith('.json'));
 
       for (const file of files) {
@@ -102,7 +102,7 @@ export class DiskCache<T> {
           );
           this.mem.set(raw.key, raw.entry);
           const ageMin = Math.round((Date.now() - raw.entry.storedAt) / 60_000);
-          const fresh  = Date.now() - raw.entry.storedAt <= raw.entry.ttlMs;
+          const fresh = Date.now() - raw.entry.storedAt <= raw.entry.ttlMs;
           console.log(
             `[diskCache:${this.ns}] Loaded "${raw.key}" from disk` +
             ` (age: ${ageMin} min, ${fresh ? 'still fresh' : 'stale'})`,
@@ -133,7 +133,7 @@ export class DiskCache<T> {
 // ---------------------------------------------------------------------------
 
 /** Max requests per window before live fetch is skipped. */
-export const RATE_LIMIT     = 100;
+export const RATE_LIMIT = 10;
 /** Sliding window size in milliseconds. */
 export const RATE_WINDOW_MS = 60_000;
 
@@ -144,8 +144,8 @@ const reqTimestamps = new Map<string, number[]>();
  * Call this at the top of every route handler.
  */
 export function trackRequest(endpointKey: string): void {
-  const now   = Date.now();
-  const prev  = reqTimestamps.get(endpointKey) ?? [];
+  const now = Date.now();
+  const prev = reqTimestamps.get(endpointKey) ?? [];
   const recent = prev.filter(t => now - t < RATE_WINDOW_MS);
   recent.push(now);
   reqTimestamps.set(endpointKey, recent);
@@ -156,7 +156,7 @@ export function trackRequest(endpointKey: string): void {
  * last RATE_WINDOW_MS milliseconds.
  */
 export function isRateLimited(endpointKey: string): boolean {
-  const now    = Date.now();
+  const now = Date.now();
   const recent = (reqTimestamps.get(endpointKey) ?? [])
     .filter(t => now - t < RATE_WINDOW_MS);
   return recent.length > RATE_LIMIT;
