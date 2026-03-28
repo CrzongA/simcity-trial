@@ -2,6 +2,8 @@
 
 A web-based 3D city simulation platform for exploring urban futures under different scenarios. Built around Portsmouth, UK, it renders photorealistic 3D buildings, terrain, and live data layers through a set of interactive simulation stories.
 
+![web interface showing air quality](docs/cover.png)
+
 ---
 
 ## Features
@@ -17,7 +19,6 @@ A web-based 3D city simulation platform for exploring urban futures under differ
 | Story | Description |
 |---|---|
 | **Sea Level Rise** | Animate flood water based on year (1962–2300) using real historical data and IPCC projections |
-| **Missile Strike** | Place Shahed-136, Tomahawk, or Trident D5 strikes with multi-tier damage radius overlays |
 | **Drone FPV** | Gamepad-controlled first-person drone with physics simulation (angle/acro modes, configurable speed tiers) |
 | **Air Quality** | Live AQI heatmap and billboards from AQICN + IQAir stations within Portsea Island |
 | **Ship Tracking** | Real-time vessel positions in Portsmouth Harbour with type filtering and trail visualization |
