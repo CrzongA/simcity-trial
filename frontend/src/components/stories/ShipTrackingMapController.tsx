@@ -172,6 +172,7 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
         const cosH       = Math.cos(CesiumMath.toRadians(course));
         const list: Entity[] = [];
         const { lat, lon, mmsi } = vessel;
+        const selected = String(mmsi) === String(selectedMmsi);
 
         // ── Hull solid (extruded polygon: waterline → deck) ─────────────────
         list.push(viewer.entities.add({
@@ -180,12 +181,33 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
             hierarchy:      new PolygonHierarchy(hullPolygon(lat, lon, sinH, cosH, base)),
             height:         base,
             extrudedHeight: base + HULL_HEIGHT,
-            material:       hullCol.withAlpha(0.82),
+            material:       selected
+              ? hullCol.brighten(0.4, new Color()).withAlpha(0.95)
+              : hullCol.withAlpha(0.82),
             outline:        true,
-            outlineColor:   hullCol.brighten(0.2, new Color()),
-            outlineWidth:   1,
+            outlineColor:   selected
+              ? Color.WHITE.withAlpha(0.9)
+              : hullCol.brighten(0.2, new Color()),
+            outlineWidth:   selected ? 2 : 1,
           },
         }));
+
+        // ── Selection glow ring ─────────────────────────────────────────────
+        if (selected) {
+          list.push(viewer.entities.add({
+            id: `ship-${mmsi}-glow`,
+            position: Cartesian3.fromDegrees(lon, lat, base),
+            ellipse: {
+              semiMajorAxis: 60,
+              semiMinorAxis: 60,
+              height:        base + 0.5,
+              material:      hullCol.withAlpha(0.12),
+              outline:       true,
+              outlineColor:  hullCol.withAlpha(0.6),
+              outlineWidth:  2,
+            } as any,
+          }));
+        }
 
         // ── Beacon: thick glowing vertical line rising from ship centre ──────
         const deckTop    = base + HULL_HEIGHT;
@@ -195,10 +217,12 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
           id: `ship-${mmsi}-beacon`,
           polyline: {
             positions:     [beaconBase, beaconTop],
-            width:         5,
+            width:         selected ? 8 : 5,
             material:      new PolylineGlowMaterialProperty({
-              glowPower:   0.4,
-              color:       hullCol.withAlpha(0.55),
+              glowPower:   selected ? 0.7 : 0.4,
+              color:       selected
+                ? hullCol.brighten(0.3, new Color()).withAlpha(0.85)
+                : hullCol.withAlpha(0.55),
             }),
             followSurface: false,
           },
@@ -229,7 +253,7 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
         viewer.scene.requestRender();
       }
     };
-  }, [vessels, activeStory, hiddenTypes, showTrails, baseHeight, viewerRef]);
+  }, [vessels, activeStory, hiddenTypes, showTrails, baseHeight, selectedMmsi, viewerRef]);
 
   // ---------------------------------------------------------------------------
   // Click handling
@@ -242,10 +266,15 @@ export const ShipTrackingMapController: React.FC<Props> = ({ viewerRef, baseHeig
 
     const onClick = (e: any) => {
       const picked = viewer.scene.pick(e.position);
-      if (!picked?.id?.id) { dispatch(setSelectedMmsi(null)); return; }
-      const entityId: string = picked.id.id;
+      const entityId: string | undefined = picked?.id?.id;
+      console.log('[shipClick] picked entity id:', entityId);
+      if (!entityId) { dispatch(setSelectedMmsi(null)); return; }
+
       if (entityId.startsWith('ship-')) {
-        const mmsi = entityId.split('-')[1];
+        // ID format: ship-<mmsi>-<part>  (mmsi is always a 9-digit number)
+        const match = entityId.match(/^ship-(\d+)-/);
+        const mmsi = match?.[1] ?? null;
+        console.log('[shipClick] extracted mmsi:', mmsi);
         if (mmsi) {
           dispatch(setSelectedMmsi(mmsi === selectedRef.current ? null : mmsi));
           return;
