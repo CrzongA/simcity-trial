@@ -5,6 +5,8 @@ import {
   Ellipsoid,
   Transforms,
   PerspectiveFrustum,
+  Cartographic,
+  Matrix4,
 } from 'cesium';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { setFlightMode, setSpeedTier, AxisCalibration } from '../../store/droneSlice';
@@ -44,6 +46,8 @@ const _right   = new Cartesian3();
 const _bodyUp  = new Cartesian3();
 const _worldUp = new Cartesian3();
 const _newPos  = new Cartesian3();
+const _cartoScratch = new Cartographic();
+const _enuMatrix    = new Matrix4();
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -284,7 +288,7 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
           acroPitch.current   = 0;
           acroRoll.current    = 0;
           // Project angle-mode scalar velocity into ECEF 3D velocity
-          const t = Transforms.eastNorthUpToFixedFrame(cam.position);
+          const t = Transforms.eastNorthUpToFixedFrame(cam.position, Ellipsoid.WGS84, _enuMatrix);
           const ex = t[0], ey = t[1], ez = t[2];
           const nx = t[4], ny = t[5], nz = t[6];
           const ux = t[8], uy = t[9], uz = t[10];
@@ -306,7 +310,7 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
       // ── ENU frame at current camera position ─────────────────────────────
       const camera   = viewer.camera;
       const position = camera.position;
-      const enuT     = Transforms.eastNorthUpToFixedFrame(position);
+      const enuT     = Transforms.eastNorthUpToFixedFrame(position, Ellipsoid.WGS84, _enuMatrix);
       _east.x  = enuT[0]; _east.y  = enuT[1]; _east.z  = enuT[2];
       _north.x = enuT[4]; _north.y = enuT[5]; _north.z = enuT[6];
       _up.x    = enuT[8]; _up.y    = enuT[9]; _up.z    = enuT[10];
@@ -345,13 +349,9 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
         _newPos.z = position.z + (_fwd.z*velFwd.current + _right.z*velStrafe.current + _up.z*velClimb.current) * dt;
 
         // Terrain floor clamp
-        const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos);
+        const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos, _cartoScratch);
         if (carto) {
-          if (now - lastTerrainSampleTimeRef.current > 100) {
-            lastTerrainHeightRef.current = viewer.scene.sampleHeight(carto) ?? 0;
-            lastTerrainSampleTimeRef.current = now;
-          }
-          const terrainH = lastTerrainHeightRef.current;
+          const terrainH = viewer.scene.globe.getHeight(carto) ?? 0;
           if (carto.height < terrainH + 2) {
             carto.height = terrainH + 2;
             velClimb.current = Math.max(0, velClimb.current);
@@ -421,13 +421,9 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
         _newPos.z = position.z + velECEF.current.z * dt;
 
         // Terrain floor clamp — cancel downward velocity component on contact
-        const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos);
+        const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos, _cartoScratch);
         if (carto) {
-          if (now - lastTerrainSampleTimeRef.current > 100) {
-            lastTerrainHeightRef.current = viewer.scene.sampleHeight(carto) ?? 0;
-            lastTerrainSampleTimeRef.current = now;
-          }
-          const terrainH = lastTerrainHeightRef.current;
+          const terrainH = viewer.scene.globe.getHeight(carto) ?? 0;
           if (carto.height < terrainH + 2) {
             carto.height = terrainH + 2;
             Ellipsoid.WGS84.geodeticSurfaceNormal(_newPos, _worldUp);
@@ -453,7 +449,7 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
       }
 
       // ── HUD DOM updates (direct writes, no React re-renders) ─────────────
-      const hudCarto = Ellipsoid.WGS84.cartesianToCartographic(finalPos);
+      const hudCarto = Ellipsoid.WGS84.cartesianToCartographic(finalPos, _cartoScratch);
       if (altRef.current && hudCarto)
         altRef.current.textContent = Math.round(hudCarto.height).toString();
 

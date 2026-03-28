@@ -84,8 +84,6 @@ const CityMap = () => {
   const droneHorizonRef = useRef<SVGLineElement | null>(null);
   const droneCtrlRef = useRef<HTMLSpanElement | null>(null);
 
-  const [fps, setFps] = useState<number>(0);
-
   // -- Context Menu and Billboard State --
   const [contextMenu, setContextMenu] = useState<{ show: boolean, x: number, y: number, cartesian: Cartesian3 | null }>({ show: false, x: 0, y: 0, cartesian: null });
   const [billboards, setBillboards] = useState<BillboardData[]>([]);
@@ -332,8 +330,6 @@ const CityMap = () => {
 
   // Update tileset/scene properties when settings change
   useEffect(() => {
-    let frameCount = 0;
-    let lastTime = performance.now();
     let postRenderListener: () => void;
 
     const getAutoSse = (heightM: number): number => {
@@ -342,19 +338,11 @@ const CityMap = () => {
       return 2;
     };
 
-    const setupFpsTracker = setInterval(() => {
+    const setupListener = setInterval(() => {
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && viewer.scene) {
-        clearInterval(setupFpsTracker);
+        clearInterval(setupListener);
         postRenderListener = () => {
-          frameCount++;
-          const now = performance.now();
-          if (now - lastTime >= 1000) {
-            setFps(Math.round((frameCount * 1000) / (now - lastTime)));
-            frameCount = 0;
-            lastTime = now;
-          }
-
           // Dynamic SSE based on camera height
           if (autoSseRef.current && tilesetRef.current) {
             const h = viewer.camera.positionCartographic?.height ?? 0;
@@ -370,13 +358,33 @@ const CityMap = () => {
     }, 500);
 
     return () => {
-      clearInterval(setupFpsTracker);
+      clearInterval(setupListener);
       const viewer = viewerRef.current?.cesiumElement;
       if (viewer && viewer.scene && postRenderListener) {
         viewer.scene.postRender.removeEventListener(postRenderListener);
       }
     };
   }, []);
+
+  // Drive continuous rendering for physics/animation stories
+  useEffect(() => {
+    let frameId: number;
+    const needsContinuousRender = activeStory === 'drone-flying' || activeStory === 'missile-strike';
+    
+    if (needsContinuousRender) {
+      const loop = () => {
+        if (viewerRef.current?.cesiumElement) {
+          viewerRef.current.cesiumElement.scene.requestRender();
+        }
+        frameId = requestAnimationFrame(loop);
+      };
+      loop();
+    }
+    
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [activeStory]);
 
   // Sync autoSse ref so postRender closure reads the latest value
   useEffect(() => { autoSseRef.current = autoSse; }, [autoSse]);
@@ -633,7 +641,8 @@ const CityMap = () => {
         navigationHelpButton={false}
         sceneModePicker={false}
         baseLayerPicker={false}
-        requestRenderMode={false}
+        requestRenderMode={true}
+        maximumRenderTimeChange={Infinity}
         baseLayer={false}
       >
         <ContextMenuLogic setContextMenu={setContextMenu} billboards={billboards} billboardsRef={billboardsRef} />
@@ -723,7 +732,6 @@ const CityMap = () => {
         width: '260px',
       }}>
         <AdvancedControls
-          fps={fps}
           optimizeVisuals={optimizeVisuals} setOptimizeVisuals={setOptimizeVisuals}
           resolutionScale={resolutionScale} setResolutionScale={setResolutionScale}
           sse={sse} setSse={setSse}

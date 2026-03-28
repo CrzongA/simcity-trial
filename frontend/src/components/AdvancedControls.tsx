@@ -11,7 +11,7 @@ interface CameraPos {
 }
 
 interface AdvancedControlsProps {
-  fps: number;
+
   optimizeVisuals: boolean;
   setOptimizeVisuals: (v: boolean) => void;
   resolutionScale: number;
@@ -34,7 +34,7 @@ interface AdvancedControlsProps {
 }
 
 export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
-  fps,
+
   optimizeVisuals, setOptimizeVisuals,
   resolutionScale, setResolutionScale,
   sse, setSse,
@@ -51,6 +51,39 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   const [copied, setCopied] = useState(false);
   const [sunTime, setSunTime] = useState<number>(new Date().getHours() + new Date().getMinutes() / 60);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [fps, setFps] = useState<number>(0);
+
+  // Calculate FPS locally so it doesn't re-render the outer map
+  useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let postRenderListener: () => void;
+
+    const setupFpsTracker = setInterval(() => {
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && viewer.scene) {
+        clearInterval(setupFpsTracker);
+        postRenderListener = () => {
+          frameCount++;
+          const now = performance.now();
+          if (now - lastTime >= 1000) {
+            setFps(Math.round((frameCount * 1000) / (now - lastTime)));
+            frameCount = 0;
+            lastTime = now;
+          }
+        };
+        viewer.scene.postRender.addEventListener(postRenderListener);
+      }
+    }, 500);
+
+    return () => {
+      clearInterval(setupFpsTracker);
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && viewer.scene && postRenderListener) {
+        viewer.scene.postRender.removeEventListener(postRenderListener);
+      }
+    };
+  }, [viewerRef]);
 
   // Sync sun time with Cesium clock
   useEffect(() => {
@@ -107,19 +140,40 @@ export const AdvancedControls: React.FC<AdvancedControlsProps> = ({
   };
 
   return (
-    <div style={{
-      background: 'rgba(25, 25, 25, 0.9)',
-      color: '#fff',
-      padding: '12px',
-      borderRadius: '8px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      fontFamily: '"Inter", "system-ui", sans-serif',
-      border: '1px solid rgba(255,255,255,0.1)'
-    }}>
+    <div 
+      className="custom-scrollbar"
+      style={{
+        background: 'rgba(25, 25, 25, 0.9)',
+        color: '#fff',
+        padding: '12px',
+        borderRadius: '8px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        fontFamily: '"Inter", "system-ui", sans-serif',
+        border: '1px solid rgba(255,255,255,0.1)',
+        maxHeight: 'calc(100vh - 80px)',
+        overflowY: 'auto',
+      }}
+    >
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(0, 255, 204, 0.3);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 255, 204, 0.5);
+        }
+      `}</style>
       <div
         onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
         style={{
