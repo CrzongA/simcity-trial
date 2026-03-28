@@ -11,6 +11,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 
 import airQualityRouter from './routes/airQuality';
+import shipTrackingRouter from './routes/shipTracking';
 
 const app = express();
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -47,6 +48,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Air quality routes
 app.use('/api/air-quality', airQualityRouter);
 
+// Ship tracking routes
+app.use('/api/ship-tracking', shipTrackingRouter);
+
 // 404 catch-all
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: 'Not found' });
@@ -66,7 +70,9 @@ app.listen(PORT, () => {
   console.log(`\nCity in Time API server running on http://localhost:${PORT}`);
   console.log('  GET /api/health');
   console.log('  GET /api/air-quality/stations');
-  console.log('  GET /api/air-quality/station/:id\n');
+  console.log('  GET /api/air-quality/station/:id');
+  console.log('  GET /api/ship-tracking/vessels');
+  console.log('  GET /api/ship-tracking/vessel/:mmsi\n');
 
   const aqicnToken = process.env['AQICN_TOKEN'];
   const iqairKey = process.env['IQAIR_API_KEY'];
@@ -81,6 +87,13 @@ app.listen(PORT, () => {
     console.warn('  [warn] IQAIR_API_KEY not set — IQAir data will not be fetched');
   } else {
     console.log('  [ok]   IQAIR_API_KEY configured');
+  }
+
+  const shipKey = process.env['MYSHIPTRACKING_API_KEY'];
+  if (!shipKey || shipKey === 'your_key_here') {
+    console.warn('  [warn] MYSHIPTRACKING_API_KEY not set — ship tracking will not fetch live data');
+  } else {
+    console.log('  [ok]   MYSHIPTRACKING_API_KEY configured');
   }
 
   console.log('');

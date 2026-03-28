@@ -21,6 +21,8 @@ import { ModelDesignMenu } from './stories/ModelDesignMenu';
 import { ModelDesignMapController } from './stories/ModelDesignMapController';
 import { AirQualityMenu } from './stories/AirQualityMenu';
 import { AirQualityMapController } from './stories/AirQualityMapController';
+import { ShipTrackingMenu } from './stories/ShipTrackingMenu';
+import { ShipTrackingMapController } from './stories/ShipTrackingMapController';
 import { setTilesLoaded } from '../store/uiSlice';
 import BannerOverlay from './BannerOverlay';
 import CityTitleOverlay from './CityTitleOverlay';
@@ -684,6 +686,10 @@ const CityMap = () => {
       {activeStory === 'air-quality' && <AirQualityMenu />}
 
       <AirQualityMapController viewerRef={viewerRef} />
+
+      {activeStory === 'ship-tracking' && <ShipTrackingMenu />}
+
+      <ShipTrackingMapController viewerRef={viewerRef} baseHeight={baseHeight} />
 
       <BaseMapControls viewerRef={viewerRef} />
 
