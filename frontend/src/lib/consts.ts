@@ -22,7 +22,7 @@ function decimateRing(ring: number[][], maxVertices: number): [number, number][]
   return out;
 }
 
-const MAX_RING_VERTICES = 20;
+const MAX_RING_VERTICES = 50;
 
 // ---------------------------------------------------------------------------
 // Exports

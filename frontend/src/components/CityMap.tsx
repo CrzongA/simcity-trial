@@ -4,7 +4,7 @@ import { ContextMenuLogic } from './ContextMenuLogic';
 import { AdvancedControls } from './AdvancedControls';
 import { ContextMenuPopup } from './ContextMenuPopup';
 import { BillboardsOverlay } from './BillboardsOverlay';
-import { UrlTemplateImageryProvider, Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests, PolylineGlowMaterialProperty } from 'cesium';
+import { UrlTemplateImageryProvider, Cartesian3, createGooglePhotorealistic3DTileset, createWorldTerrainAsync, Math as CesiumMath, ClippingPolygon, ClippingPolygonCollection, ClippingPlane, ClippingPlaneCollection, Ion, ScreenSpaceEventType, SceneTransforms, Cartographic, ScreenSpaceEventHandler, CameraEventType, Color, DistanceDisplayCondition, HeightReference, CustomShader, UniformType, Transforms, PolygonGeometry, GeometryInstance, Primitive, Ellipsoid, Material, MaterialAppearance, buildModuleUrl, EllipsoidSurfaceAppearance, CallbackProperty, GridMaterialProperty, Cartesian2, JulianDate, ColorMaterialProperty, sampleTerrainMostDetailed, PolygonHierarchy, VerticalOrigin, HorizontalOrigin, ConstantProperty, Ray, Plane, IntersectionTests, PolylineGlowMaterialProperty, ClassificationType } from 'cesium';
 import { PORTSEA_POLYGON_COORDS, PORTSEA_ALL_RINGS } from '@/lib/consts';
 import { SimulationControls } from './SimulationControls';
 import { BaseMapControls, BASE_MAPS } from './BaseMapControls';
@@ -487,6 +487,7 @@ const CityMap = () => {
           );
 
           // Re-apply boundary clipping to the tileset (strictly Portsmouth)
+          // Since MAX_RING_VERTICES was reduced to 20, this is now computationally feasible again
           tileset.clippingPolygons = new ClippingPolygonCollection({
             polygons: clippingPolygons,
             inverse: true // Clip OUTSIDE the polygon
@@ -514,6 +515,7 @@ const CityMap = () => {
             setBaseHeight(h);
 
             if (!viewer.isDestroyed()) {
+
               // Shadow Stack: Multi-layered semi-transparent polylines to create a non-additive 
               // darkening gradient (feathering) between the city tiles and the dark map.
               const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
@@ -538,6 +540,14 @@ const CityMap = () => {
           });
 
           // No clipping planes or primitives needed here.
+
+          // Performance Optimizations for Google 3D Tiles
+          tileset.skipLevelOfDetail = true;
+          tileset.baseScreenSpaceError = 1024;
+          tileset.skipScreenSpaceErrorFactor = 16;
+          tileset.skipLevels = 1;
+          (tileset as any).maximumMemoryUsage = 2048; // Older Cesium versions
+          (tileset as any).cacheBytes = 2147483648;   // Newer Cesium versions (2GB)
 
           // Initial setup of SSE and FXAA
           tileset.maximumScreenSpaceError = sse;
