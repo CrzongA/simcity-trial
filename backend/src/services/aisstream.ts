@@ -174,7 +174,7 @@ function handlePositionReport(msg: AISMessage): void {
   const meta = msg.MetaData;
   if (!pr.Valid) return;
 
-  const mmsi = meta.MMSI_String;
+  const mmsi = String(meta.MMSI_String ?? meta.MMSI);
   const existing = vessels.get(mmsi);
   const base: AISVesselState = existing ?? {
     mmsi,
@@ -212,7 +212,7 @@ function handleShipStaticData(msg: AISMessage): void {
   const sd   = msg.Message.ShipStaticData!;
   const meta = msg.MetaData;
 
-  const mmsi = meta.MMSI_String;
+  const mmsi = String(meta.MMSI_String ?? meta.MMSI);
   const existing = vessels.get(mmsi);
   const base: AISVesselState = existing ?? {
     mmsi,
