@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Cartesian3, SceneTransforms, HeadingPitchRange, Color } from 'cesium';
+import { Cartesian3, SceneTransforms, HeadingPitchRange, Color, Math as CesiumMath, BoundingSphere } from 'cesium';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { setReports, setSelectedReportId, closeForm, PREDEFINED_TAGS, type CommunityReport } from '../../store/communityReportSlice';
 
@@ -74,10 +74,9 @@ export const CommunityReportMapController: React.FC<Props> = ({ viewerRef }) => 
     const report = reports.find(r => r.id === selectedReportId);
     if (report) {
       const pos = Cartesian3.fromDegrees(report.lng, report.lat, report.height + 20);
-      viewer.camera.flyTo({
-        destination: pos,
+      viewer.camera.flyToBoundingSphere(new BoundingSphere(pos, 0), {
         duration: 1.5,
-        offset: new HeadingPitchRange(0, Math.PI / 4, 250)
+        offset: new HeadingPitchRange(CesiumMath.toRadians(-15), CesiumMath.toRadians(-35), 400)
       });
     }
   }, [viewerRef, selectedReportId, reports]);
