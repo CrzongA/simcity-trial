@@ -163,6 +163,8 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
   const keysRef        = useRef<Record<string, boolean>>({});
   const prevButtonsRef = useRef<Record<string | number, boolean>>({});
   const prevModeRef    = useRef(drone.flightMode);
+  const lastTerrainSampleTimeRef = useRef<number>(0);
+  const lastTerrainHeightRef = useRef<number>(0);
 
   // ── FOV: apply on change, restore original on story exit ─────────────────────
   useEffect(() => {
@@ -345,7 +347,11 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
         // Terrain floor clamp
         const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos);
         if (carto) {
-          const terrainH = viewer.scene.sampleHeight(carto) ?? 0;
+          if (now - lastTerrainSampleTimeRef.current > 100) {
+            lastTerrainHeightRef.current = viewer.scene.sampleHeight(carto) ?? 0;
+            lastTerrainSampleTimeRef.current = now;
+          }
+          const terrainH = lastTerrainHeightRef.current;
           if (carto.height < terrainH + 2) {
             carto.height = terrainH + 2;
             velClimb.current = Math.max(0, velClimb.current);
@@ -417,7 +423,11 @@ export const DroneMapController: React.FC<DroneMapControllerProps> = ({
         // Terrain floor clamp — cancel downward velocity component on contact
         const carto = Ellipsoid.WGS84.cartesianToCartographic(_newPos);
         if (carto) {
-          const terrainH = viewer.scene.sampleHeight(carto) ?? 0;
+          if (now - lastTerrainSampleTimeRef.current > 100) {
+            lastTerrainHeightRef.current = viewer.scene.sampleHeight(carto) ?? 0;
+            lastTerrainSampleTimeRef.current = now;
+          }
+          const terrainH = lastTerrainHeightRef.current;
           if (carto.height < terrainH + 2) {
             carto.height = terrainH + 2;
             Ellipsoid.WGS84.geodeticSurfaceNormal(_newPos, _worldUp);

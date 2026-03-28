@@ -101,14 +101,13 @@ export const SeaLevelChart: React.FC = () => {
     <div
       style={{
         position: 'absolute',
-        top: '50%',
+        top: 20,
         left: 20,
-        transform: 'translateY(-50%)',
-        zIndex: 50,
+        zIndex: 100,
         background: '#101217',
         border: '1px solid rgba(255, 255, 255, 0.15)',
         padding: '16px',
-        width: `${width + 32}px`,
+        width: `${width}px`,
         boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
         borderRadius: '2px', // Sharp
         fontFamily: '"Inter", "system-ui", sans-serif',

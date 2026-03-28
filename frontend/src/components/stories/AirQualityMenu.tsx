@@ -8,17 +8,16 @@ import {
 
 const PANEL_STYLE: React.CSSProperties = {
   position: 'absolute',
-  top: '50%',
+  top: 20,
   left: 20,
-  transform: 'translateY(-50%)',
-  zIndex: 50,
+  zIndex: 100,
   background: 'rgba(14, 16, 20, 0.92)',
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: '4px',
   padding: '14px 16px',
   fontFamily: '"Inter", "system-ui", sans-serif',
   color: '#ccc',
-  width: '240px',
+  width: '320px',
   backdropFilter: 'blur(12px)',
   boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
 };

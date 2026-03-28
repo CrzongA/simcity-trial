@@ -519,11 +519,8 @@ const CityMap = () => {
               const positions = Cartesian3.fromDegreesArray(PORTSEA_POLYGON_COORDS.flat());
 
               const shadowSteps = [
-                { width: 120, alpha: 0.08 },
                 { width: 90, alpha: 0.12 },
-                { width: 60, alpha: 0.18 },
                 { width: 30, alpha: 0.25 },
-                { width: 10, alpha: 0.35 },
               ];
 
               shadowSteps.forEach(step => {
@@ -728,8 +725,19 @@ const CityMap = () => {
           foveatedRendering={foveatedRendering} setFoveatedRendering={setFoveatedRendering}
           viewerRef={viewerRef}
         />
-        {activeStory === 'drone-flying' && <DroneSettings />}
       </div>
+
+      {activeStory === 'drone-flying' && (
+        <div style={{
+          position: 'absolute',
+          top: 20,
+          left: 20,
+          zIndex: 100,
+          width: '320px',
+        }}>
+          <DroneSettings />
+        </div>
+      )}
 
       {/* --- Overlay UI --- */}
       {/* Context Menu */}

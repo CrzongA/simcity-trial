@@ -10,11 +10,10 @@ export const MissileMenu: React.FC = () => {
     <div
       style={{
         position: 'absolute',
-        top: '50%',
+        top: '20px',
         left: '20px',
-        transform: 'translateY(-50%)',
         width: '320px',
-        zIndex: 50,
+        zIndex: 100,
         background: '#101217',
         border: '1px solid rgba(255, 60, 0, 0.4)',
         padding: '20px',

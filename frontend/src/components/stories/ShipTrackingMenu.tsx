@@ -14,7 +14,7 @@ const PANEL_STYLE: React.CSSProperties = {
   padding: '14px 16px',
   fontFamily: '"Inter", "system-ui", sans-serif',
   color: '#ccc',
-  width: '240px',
+  width: '320px',
   backdropFilter: 'blur(12px)',
   boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
   flexShrink: 0,
@@ -74,10 +74,9 @@ export const ShipTrackingMenu: React.FC = () => {
   return (
     <div style={{
       position: 'absolute',
-      top: '50%',
+      top: 20,
       left: 20,
-      transform: 'translateY(-50%)',
-      zIndex: 50,
+      zIndex: 100,
       display: 'flex',
       flexDirection: 'row',
       alignItems: 'flex-start',
