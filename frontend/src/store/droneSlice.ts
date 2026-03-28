@@ -52,11 +52,11 @@ const initialState: DroneState = {
   },
   deadzone: 0.08,
   sensitivity: 1.0,
-  fov: 90,
+  fov: 110,
   mass: 1.0,
   acroThrust: 58.86,   // 6g TWR — hover at stick centre, 5g net climb at full throttle
   acroDrag: 0.3,       // ~70 m/s terminal at 45° tilt (~250 km/h)
-  acroCameraTilt: 20,
+  acroCameraTilt: 25,
   flightMode: 'angle',
   speedTier: 'normal',
 };
