@@ -12,6 +12,7 @@ import cors from 'cors';
 
 import airQualityRouter from './routes/airQuality';
 import shipTrackingRouter from './routes/shipTracking';
+import './services/aisstream';  // starts WebSocket connection on boot if AISSTREAM_API_KEY is set
 
 const app = express();
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10);
@@ -89,11 +90,21 @@ app.listen(PORT, () => {
     console.log('  [ok]   IQAIR_API_KEY configured');
   }
 
-  const shipKey = process.env['MYSHIPTRACKING_API_KEY'];
-  if (!shipKey || shipKey === 'your_key_here') {
-    console.warn('  [warn] MYSHIPTRACKING_API_KEY not set — ship tracking will not fetch live data');
+  const aisKey = process.env['AISSTREAM_API_KEY'];
+  if (!aisKey || aisKey === 'your_key_here') {
+    console.warn('  [warn] AISSTREAM_API_KEY not set — AISStream will not connect');
   } else {
-    console.log('  [ok]   MYSHIPTRACKING_API_KEY configured');
+    console.log('  [ok]   AISSTREAM_API_KEY configured (WebSocket connecting…)');
+  }
+
+  const vfKey = process.env['VESSELFINDER_API_KEY'];
+  if (vfKey && vfKey !== 'your_key_here') {
+    console.log('  [ok]   VESSELFINDER_API_KEY configured (fallback)');
+  }
+
+  const shipKey = process.env['MYSHIPTRACKING_API_KEY'];
+  if (shipKey && shipKey !== 'your_key_here') {
+    console.log('  [ok]   MYSHIPTRACKING_API_KEY configured (fallback)');
   }
 
   console.log('');
