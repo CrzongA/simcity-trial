@@ -1,4 +1,4 @@
-# City In Time — Frontend
+# Sim City: Portsmouth — Frontend
 
 React + Vite application that renders a photorealistic 3D map of Portsmouth and hosts all simulation stories.
 

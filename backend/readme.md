@@ -1,4 +1,4 @@
-# City In Time — Backend API
+# Sim City: Portsmouth — Backend API
 
 Express + TypeScript server that fetches real-time air quality and ship tracking data, caches it, and serves it to the frontend.
 

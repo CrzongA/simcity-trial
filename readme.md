@@ -1,4 +1,4 @@
-# City In Time
+# Sim City: Portsmouth
 
 A web-based 3D city simulation platform for exploring urban futures under different scenarios. Built around Portsmouth, UK, it renders photorealistic 3D buildings, terrain, and live data layers through a set of interactive simulation stories.
 
