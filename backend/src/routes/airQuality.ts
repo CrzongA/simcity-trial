@@ -15,13 +15,18 @@ import {
   AqicnStationDetail,
 } from '../services/aqicn';
 import { fetchAllIQAirPortsmouthStations, IQAirStation } from '../services/iqair';
+import { STATIONS_TTL_MS, STATION_DETAIL_TTL_MS } from '../services/cache';
 import {
-  stationsCache,
-  stationDetailCache,
-  STATIONS_TTL_MS,
-  STATION_DETAIL_TTL_MS,
-  CacheEntry,
-} from '../services/cache';
+  DiskCache,
+  DiskCacheEntry,
+  trackRequest,
+  isRateLimited,
+  requestCount,
+} from '../services/diskCache';
+
+// Disk-backed caches (persist across restarts)
+const stationsCache      = new DiskCache<NormalisedStation[]>('air-stations');
+const stationDetailCache = new DiskCache<StationDetailResponse>('air-station-detail');
 
 const router = Router();
 
@@ -302,25 +307,40 @@ async function fetchLiveStations(): Promise<{
 // ---------------------------------------------------------------------------
 
 router.get('/stations', async (_req: Request, res: Response): Promise<void> => {
-  // 1. Try fresh cache
-  const fresh = stationsCache.getFresh(STATIONS_CACHE_KEY) as NormalisedStation[] | undefined;
+  trackRequest('air:stations');
+
+  // 1. Try fresh cache (memory-backed, persisted to disk)
+  const fresh = stationsCache.getFresh(STATIONS_CACHE_KEY);
   if (fresh) {
     console.log(`[airQuality] /stations — cache HIT (${fresh.length} station(s))`);
-    const response: StationsResponse = {
-      stations: fresh,
-      fetchedAt: new Date().toISOString(),
-      sources: [...new Set(fresh.map((s) => s.source))],
-    };
-    res.json(response);
+    res.json({ stations: fresh, fetchedAt: new Date().toISOString(), sources: [...new Set(fresh.map(s => s.source))] } satisfies StationsResponse);
+    return;
+  }
+
+  // Helper: try to respond with stale disk cache; returns true if served
+  const serveStale = (reason: string): boolean => {
+    const staleEntry: DiskCacheEntry<NormalisedStation[]> | undefined = stationsCache.get(STATIONS_CACHE_KEY);
+    if (!staleEntry) return false;
+    const ageMin = Math.round((Date.now() - staleEntry.storedAt) / 60_000);
+    console.warn(`[airQuality] /stations — ${reason}, returning disk cache (${ageMin} min old)`);
+    const stale = staleEntry.value.map(s => ({ ...s, isStale: true }));
+    res.json({ stations: stale, fetchedAt: new Date().toISOString(), sources: [...new Set(stale.map(s => s.source))], isStale: true, error: `${reason}; returning cached data` } satisfies StationsResponse);
+    return true;
+  };
+
+  // 2. Rate-limited: skip live fetch
+  if (isRateLimited('air:stations')) {
+    console.warn(`[airQuality] /stations — rate limited (${requestCount('air:stations')} req/min)`);
+    if (serveStale('rate limited')) return;
+    res.status(503).json({ stations: [], fetchedAt: new Date().toISOString(), sources: [], error: 'Rate limited and no cached data available' } satisfies StationsResponse);
     return;
   }
 
   console.log('[airQuality] /stations — cache MISS, starting live fetch…');
 
-  // 2. Attempt live fetch
+  // 3. Attempt live fetch
   let stations: NormalisedStation[] = [];
   let sources: string[] = [];
-  let liveFetchFailed = false;
 
   try {
     ({ stations, sources } = await fetchLiveStations());
@@ -328,51 +348,18 @@ router.get('/stations', async (_req: Request, res: Response): Promise<void> => {
     console.log(`[airQuality] /stations — cached ${stations.length} station(s) for ${STATIONS_TTL_MS / 60000} min`);
   } catch (err) {
     console.error('[airQuality] Live fetch error:', err);
-    liveFetchFailed = true;
-  }
-
-  // 3. Fall back to stale cache on failure
-  if (liveFetchFailed) {
-    const staleEntry = stationsCache.get(STATIONS_CACHE_KEY) as CacheEntry<NormalisedStation[]> | undefined;
-    if (staleEntry) {
-      const ageMin = Math.round((Date.now() - staleEntry.storedAt) / 60000);
-      console.warn(`[airQuality] /stations — live fetch failed, returning stale cache (${ageMin} min old)`);
-      const staleStations = staleEntry.value.map((s) => ({ ...s, isStale: true }));
-      const response: StationsResponse = {
-        stations: staleStations,
-        fetchedAt: new Date().toISOString(),
-        sources: [...new Set(staleStations.map((s) => s.source))],
-        isStale: true,
-        error: 'Live fetch failed; returning cached data',
-      };
-      res.json(response);
-      return;
-    }
-
-    console.error('[airQuality] /stations — live fetch failed and no cache available, returning 503');
-    const response: StationsResponse = {
-      stations: [],
-      fetchedAt: new Date().toISOString(),
-      sources: [],
-      error: 'Failed to fetch air quality data and no cache is available',
-    };
-    res.status(503).json(response);
+    if (serveStale('live fetch failed')) return;
+    console.error('[airQuality] /stations — no cache available, returning 503');
+    res.status(503).json({ stations: [], fetchedAt: new Date().toISOString(), sources: [], error: 'Failed to fetch air quality data and no cache is available' } satisfies StationsResponse);
     return;
   }
 
   console.log(`[airQuality] /stations — responding with ${stations.length} station(s)`);
-  if (stations.length > 0) {
-    stations.forEach(s => {
-      console.log(`  → ${s.id}  "${s.name}"  AQI ${s.aqi ?? '—'} [${s.aqiCategory}]  lat ${s.lat.toFixed(4)} lng ${s.lng.toFixed(4)}`);
-    });
-  }
+  stations.forEach(s => {
+    console.log(`  → ${s.id}  "${s.name}"  AQI ${s.aqi ?? '—'} [${s.aqiCategory}]  lat ${s.lat.toFixed(4)} lng ${s.lng.toFixed(4)}`);
+  });
 
-  const response: StationsResponse = {
-    stations,
-    fetchedAt: new Date().toISOString(),
-    sources,
-  };
-  res.json(response);
+  res.json({ stations, fetchedAt: new Date().toISOString(), sources } satisfies StationsResponse);
 });
 
 // ---------------------------------------------------------------------------
@@ -401,8 +388,10 @@ router.get('/station/:id', async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
+  trackRequest('air:station-detail');
+
   // 1. Try fresh cache
-  const fresh = stationDetailCache.getFresh(id) as StationDetailResponse | undefined;
+  const fresh = stationDetailCache.getFresh(id);
   if (fresh) {
     console.log(`[airQuality] /station/${id} — cache HIT`);
     res.json(fresh);
@@ -411,22 +400,33 @@ router.get('/station/:id', async (req: Request, res: Response): Promise<void> =>
 
   console.log(`[airQuality] /station/${id} — cache MISS, fetching detail…`);
 
+  // Helper: try to respond with stale disk cache; returns true if served
+  const serveStale = (reason: string): boolean => {
+    const staleEntry: DiskCacheEntry<StationDetailResponse> | undefined = stationDetailCache.get(id);
+    if (!staleEntry) return false;
+    const ageMin = Math.round((Date.now() - staleEntry.storedAt) / 60_000);
+    console.warn(`[airQuality] /station/${id} — ${reason}, returning disk cache (${ageMin} min old)`);
+    res.json({ ...staleEntry.value, isStale: true });
+    return true;
+  };
+
   const aqicnToken = process.env['AQICN_TOKEN'] ?? '';
   if (!aqicnToken || aqicnToken === 'your_token_here') {
-    // Return stale if available
-    const staleEntry = stationDetailCache.get(id) as CacheEntry<StationDetailResponse> | undefined;
-    if (staleEntry) {
-      const ageMin = Math.round((Date.now() - staleEntry.storedAt) / 60000);
-      console.warn(`[airQuality] /station/${id} — no token, returning stale cache (${ageMin} min old)`);
-      res.json({ ...staleEntry.value, isStale: true });
-      return;
-    }
+    if (serveStale('no token')) return;
     console.warn(`[airQuality] /station/${id} — AQICN_TOKEN not configured`);
     res.status(503).json({ error: 'AQICN_TOKEN not configured' });
     return;
   }
 
-  // 2. Live fetch
+  // 2. Rate-limited: skip live fetch
+  if (isRateLimited('air:station-detail')) {
+    console.warn(`[airQuality] /station/${id} — rate limited (${requestCount('air:station-detail')} req/min)`);
+    if (serveStale('rate limited')) return;
+    res.status(503).json({ error: 'Rate limited and no cached data available' });
+    return;
+  }
+
+  // 3. Live fetch
   try {
     console.log(`[airQuality] /station/${id} — calling AQICN feed for uid ${uid}…`);
     const detail = await fetchAqicnStationDetail(uid, aqicnToken);
@@ -434,39 +434,22 @@ router.get('/station/:id', async (req: Request, res: Response): Promise<void> =>
     console.log(`  PM2.5 ${detail.pollutants.pm25 ?? '—'}  PM10 ${detail.pollutants.pm10 ?? '—'}  NO2 ${detail.pollutants.no2 ?? '—'}  O3 ${detail.pollutants.o3 ?? '—'}`);
 
     const response: StationDetailResponse = {
-      id: detail.id,
-      source: detail.source,
-      name: detail.name,
-      lat: detail.lat,
-      lng: detail.lng,
-      aqi: detail.aqi,
-      aqiCategory: detail.aqiCategory,
-      aqiColor: detail.aqiColor,
+      id: detail.id, source: detail.source, name: detail.name,
+      lat: detail.lat, lng: detail.lng, aqi: detail.aqi,
+      aqiCategory: detail.aqiCategory, aqiColor: detail.aqiColor,
       dominantPollutant: detail.dominantPollutant,
       pollutants: { ...detail.pollutants },
       pollutantsDetailed: { ...detail.pollutantsDetailed },
-      temperature: detail.temperature,
-      humidity: detail.humidity,
-      wind: { ...detail.wind },
-      updatedAt: detail.updatedAt,
-      isStale: false,
+      temperature: detail.temperature, humidity: detail.humidity,
+      wind: { ...detail.wind }, updatedAt: detail.updatedAt, isStale: false,
     };
 
     stationDetailCache.set(id, response, STATION_DETAIL_TTL_MS);
     res.json(response);
   } catch (err) {
     console.error(`[airQuality] Station detail fetch failed for ${id}:`, err);
-
-    // Fall back to stale
-    const staleEntry = stationDetailCache.get(id) as CacheEntry<StationDetailResponse> | undefined;
-    if (staleEntry) {
-      res.json({ ...staleEntry.value, isStale: true });
-      return;
-    }
-
-    res.status(502).json({
-      error: `Failed to fetch detail for station ${id}: ${(err as Error).message}`,
-    });
+    if (serveStale('live fetch failed')) return;
+    res.status(502).json({ error: `Failed to fetch detail for station ${id}: ${(err as Error).message}` });
   }
 });
 
