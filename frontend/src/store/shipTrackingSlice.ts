@@ -59,6 +59,7 @@ interface ShipTrackingState {
   lastFetchedAt: string | null;
   loading: boolean;
   error: string | null;
+  autoRefresh: boolean;
   refreshInterval: RefreshInterval;
   selectedMmsi: string | null;
   showTrails: boolean;
@@ -70,6 +71,7 @@ const initialState: ShipTrackingState = {
   lastFetchedAt: null,
   loading: false,
   error: null,
+  autoRefresh: false,
   refreshInterval: 60,
   selectedMmsi: null,
   showTrails: true,
@@ -91,6 +93,9 @@ export const shipTrackingSlice = createSlice({
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
+    },
+    setAutoRefresh: (state, action: PayloadAction<boolean>) => {
+      state.autoRefresh = action.payload;
     },
     setRefreshInterval: (state, action: PayloadAction<RefreshInterval>) => {
       state.refreshInterval = action.payload;
@@ -120,6 +125,7 @@ export const {
   setLastFetchedAt,
   setLoading,
   setError,
+  setAutoRefresh,
   setRefreshInterval,
   setSelectedMmsi,
   setShowTrails,
