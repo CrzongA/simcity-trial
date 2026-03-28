@@ -1,56 +1,57 @@
-# City in Time — Air Quality API Server
+# City In Time — Backend API
 
-A lightweight Express + TypeScript server that fetches real-time air quality data from [IQAir](https://www.iqair.com/air-pollution-data-api) and [AQICN](https://aqicn.org/api/), filters results to stations within **Portsea Island**, and serves them to the frontend.
+Express + TypeScript server that fetches real-time air quality and ship tracking data, caches it, and serves it to the frontend.
 
 ---
 
-## Quick start
+## Quick Start
 
 ```bash
 cd backend
-cp .env.template .env   # then fill in your API keys
+cp .env.template .env   # fill in your API keys
 npm install
 npm run dev             # starts on http://localhost:3001
 ```
 
-The frontend Vite dev server (`npm run dev` in `frontend/`) proxies all `/api` requests to `localhost:3001` automatically — no extra config needed.
+The frontend Vite dev server proxies all `/api` requests to `localhost:3001` automatically — no extra config needed.
 
 ---
 
-## API Keys
+## Environment Variables
+
+```env
+PORT=3001
+AQICN_TOKEN=your_token_here
+IQAIR_API_KEY=your_key_here
+MYSHIPTRACKING_API_KEY=your_key_here
+AQICN_STATION_UIDS=          # optional: comma-separated UIDs to pre-pin
+```
 
 | Key | Where to get it | Free tier |
 |---|---|---|
-| `AQICN_TOKEN` | [aqicn.org/data-platform/token](https://aqicn.org/data-platform/token/) | ~1 000 calls/day |
-| `IQAIR_API_KEY` | [iqair.com/dashboard/api](https://www.iqair.com/dashboard/api) | 10 000 calls/month |
+| `AQICN_TOKEN` | [aqicn.org/data-platform/token](https://aqicn.org/data-platform/token/) | ~1,000 calls/day |
+| `IQAIR_API_KEY` | [iqair.com/dashboard/api](https://www.iqair.com/dashboard/api) | 10,000 calls/month |
+| `MYSHIPTRACKING_API_KEY` | [myshiptracking.com](https://myshiptracking.com) | Pay-per-call |
 
-Set both in `backend/.env`:
-
-```env
-AQICN_TOKEN=your_token_here
-IQAIR_API_KEY=your_key_here
-PORT=3001
-```
-
-The server starts cleanly without keys — sources with missing keys are skipped and the response will contain an empty `stations` array until keys are configured.
+The server starts cleanly without keys — sources with missing keys are skipped and the response will contain empty data until keys are configured.
 
 ---
 
-## Endpoints
+## API Endpoints
 
 ### `GET /api/health`
-Basic liveness check.
+Liveness check.
 
 ```json
-{ "status": "ok", "timestamp": "2026-03-27T10:00:00.000Z" }
+{ "status": "ok", "timestamp": "2026-03-28T10:00:00.000Z" }
 ```
 
 ---
 
 ### `GET /api/air-quality/stations`
-Returns all air quality monitoring stations within Portsea Island with their latest readings, merged from both AQICN and IQAir.
+All air quality monitoring stations within Portsea Island, merged from AQICN and IQAir.
 
-**Response shape:**
+**Response:**
 ```json
 {
   "stations": [
@@ -65,36 +66,32 @@ Returns all air quality monitoring stations within Portsea Island with their lat
       "aqiColor": "#00e400",
       "dominantPollutant": "pm25",
       "pollutants": {
-        "pm25": 8.2,
-        "pm10": 15.1,
-        "no2": 22.0,
-        "o3": 34.5,
-        "co": null,
-        "so2": null
+        "pm25": 8.2, "pm10": 15.1, "no2": 22.0,
+        "o3": 34.5, "co": null, "so2": null
       },
       "temperature": 12.5,
       "humidity": 78,
       "wind": { "speed": 3.2, "direction": 220 },
-      "updatedAt": "2026-03-27T10:00:00Z",
+      "updatedAt": "2026-03-28T10:00:00Z",
       "isStale": false
     }
   ],
-  "fetchedAt": "2026-03-27T10:05:00Z",
+  "fetchedAt": "2026-03-28T10:05:00Z",
   "sources": ["aqicn", "iqair"],
   "isStale": false
 }
 ```
 
-**Caching:** Results are cached in memory for **10 minutes**. If a live fetch fails but a previous result exists, stale data is returned with `"isStale": true`.
+**Cache:** 10 minutes. Returns stale data with `"isStale": true` if a live fetch fails but a previous result exists.
 
 ---
 
 ### `GET /api/air-quality/station/:id`
-Returns a detailed reading for a single AQICN station (includes per-pollutant raw values).
+Detailed reading for a single AQICN station (includes per-pollutant raw values).
 
 Only `aqicn-*` IDs are supported (IQAir free tier does not expose per-station detail endpoints).
 
-**Response shape:** Same as a single station object above, plus:
+**Additional field in response:**
 ```json
 {
   "pollutantsDetailed": {
@@ -104,7 +101,59 @@ Only `aqicn-*` IDs are supported (IQAir free tier does not expose per-station de
 }
 ```
 
-**Caching:** Individual station details are cached for **15 minutes**.
+**Cache:** 15 minutes.
+
+---
+
+### `GET /api/ship-tracking/vessels`
+All vessels currently within the Portsmouth Harbour bounding box.
+
+**Response:**
+```json
+{
+  "vessels": [
+    {
+      "mmsi": 235001234,
+      "name": "HMS EXAMPLE",
+      "type": "military",
+      "lat": 50.798,
+      "lng": -1.111,
+      "speed": 4.2,
+      "heading": 180,
+      "course": 178,
+      "navStatus": "Under Way Using Engine",
+      "updatedAt": "2026-03-28T10:00:00Z"
+    }
+  ],
+  "fetchedAt": "2026-03-28T10:00:05Z",
+  "isStale": false
+}
+```
+
+**Vessel types:** `cargo`, `tanker`, `passenger`, `fishing`, `military`, `sailing`, `pleasure`, `other`
+
+**Cache:** 60 seconds.
+
+---
+
+### `GET /api/ship-tracking/vessel/:mmsi`
+Extended detail for a single vessel by MMSI.
+
+**Additional fields:**
+```json
+{
+  "imo": 1234567,
+  "callsign": "EXAM1",
+  "flag": "GB",
+  "length": 142,
+  "beam": 22,
+  "draught": 6.5,
+  "destination": "PORTSMOUTH",
+  "eta": "2026-03-28T14:00:00Z"
+}
+```
+
+**Cache:** 5 minutes.
 
 ---
 
@@ -115,12 +164,14 @@ backend/
 ├── src/
 │   ├── index.ts              # Express app, middleware, startup
 │   ├── routes/
-│   │   └── airQuality.ts     # Route handlers (cache → live fetch → stale fallback)
+│   │   ├── airQuality.ts     # Air quality route handlers
+│   │   └── shipTracking.ts   # Ship tracking route handlers
 │   ├── services/
 │   │   ├── aqicn.ts          # AQICN API client + response normalisation
 │   │   ├── iqair.ts          # IQAir API client + response normalisation
+│   │   ├── myshiptracking.ts # MyShipTracking API client + type mapping
 │   │   ├── aqiHelpers.ts     # AQI category + colour lookup (US EPA scale)
-│   │   └── cache.ts          # Generic in-memory TTL cache
+│   │   └── cache.ts          # Generic in-memory TTL cache with stale fallback
 │   └── utils/
 │       └── geo.ts            # Portsea Island polygon, bounding box, point-in-polygon
 ├── .env.template
@@ -128,7 +179,7 @@ backend/
 └── tsconfig.json
 ```
 
-### Request flow
+### Air Quality Request Flow
 
 ```
 GET /api/air-quality/stations
@@ -151,23 +202,39 @@ GET /api/air-quality/stations
                        503 + error message
 ```
 
-### Data sources
+### Ship Tracking Request Flow
 
-**AQICN** (`/map/bounds/`)
-- Queries a bounding box around Portsea Island (`50.776,-1.115,50.838,-1.026`)
-- Returns all stations in the area; filtered server-side to those within the island polygon
-- Provides: AQI, station name, lat/lng, dominant pollutant
+```
+GET /api/ship-tracking/vessels
+        │
+        ▼
+  Cache fresh? ──yes──► return cached response
+        │ no
+        ▼
+  Query MyShipTracking zone API (Portsmouth Harbour bbox)
+  Map raw vessel type codes → named categories
+        │
+        ├─ success ──► cache 60 sec ──► return response
+        │
+        └─ failure ──► stale cache? ──yes──► return with isStale:true
+                               │ no
+                               ▼
+                       503 + error message
+```
 
-**IQAir** (`/city?city=Portsmouth&state=England&country=UK`)
-- City-level reading for Portsmouth
-- Provides: AQI, PM2.5, temperature, humidity, wind speed/direction
-- Merged into the AQICN station list (deduplicated if within 0.5 km of an existing station)
+---
 
-### Polygon filtering
+## Data Sources
 
-The Portsea Island boundary is an 18-vertex polygon defined in `src/utils/geo.ts`. After fetching the AQICN bounding box results, each station is tested with a ray-casting point-in-polygon algorithm (`isWithinPortseaIsland(lat, lng)`). Stations outside the island are discarded.
+**AQICN** — queries bounding box `50.776,-1.115,50.838,-1.026`, then filters server-side to stations within the Portsea Island polygon (18-vertex ray-casting).
 
-### AQI colour scale (US EPA)
+**IQAir** — city-level reading for Portsmouth, England. Merged into the station list; deduplicated if within 0.5 km of an existing AQICN station.
+
+**MyShipTracking** — zone query for the Portsmouth Harbour area. Returns live AIS positions with speed, heading, navigation status, and vessel metadata.
+
+---
+
+## AQI Colour Scale (US EPA)
 
 | Range | Category | Colour |
 |---|---|---|
@@ -180,14 +247,13 @@ The Portsea Island boundary is an 18-vertex polygon defined in `src/utils/geo.ts
 
 ---
 
-## Rate limits & caching strategy
+## Rate Limits & Caching
 
-| Source | Free limit | Cache TTL | Effective calls |
+| Source | Free limit | Cache TTL | Max calls/day |
 |---|---|---|---|
-| AQICN | ~1 000/day | 10 min | ≤ 144/day |
-| IQAir | 10 000/month | 10 min | ≤ 4 320/month |
-
-With a 10-minute TTL, the server makes at most ~144 calls/day per source — well within free tier limits even if multiple users hit the API simultaneously.
+| AQICN | ~1,000/day | 10 min | ≤ 144 |
+| IQAir | 10,000/month | 10 min | ≤ 144 |
+| MyShipTracking | Pay-per-call | 60 sec | ≤ 1,440 |
 
 ---
 
@@ -195,6 +261,6 @@ With a 10-minute TTL, the server makes at most ~144 calls/day per source — wel
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Run with nodemon + ts-node (hot-reload on file changes) |
+| `npm run dev` | Run with nodemon + ts-node (hot-reload) |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm start` | Run compiled output from `dist/` |
